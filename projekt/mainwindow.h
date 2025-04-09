@@ -4,7 +4,10 @@
 #include <QAction>
 #include <QMainWindow>
 #include "simulation.h"
-
+#include "serwer.h"
+#include <QTcpSocket>
+#include <QTcpServer>
+#include <QLabel>
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -20,6 +23,11 @@ public:
     ~MainWindow();
 
 private slots:
+    void onClientConnected();
+    void onClientDisconnected();
+    void onClientError(QAbstractSocket::SocketError socketError);
+    void onServerNewConnection();
+
     void simulation_start();
     void simulation_stop();
 
@@ -63,10 +71,15 @@ private slots:
 
     void on_generator_infill_input_editingFinished();
 
+    void on_btnPolacz_clicked();
+
+
 private:
     void init();
 
     Simulation &simulation;
     Ui::MainWindow *ui;
+    QTcpSocket *clientSocket = nullptr;
+    QTcpServer *server = nullptr;
 };
 #endif // MAINWINDOW_H

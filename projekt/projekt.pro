@@ -1,5 +1,5 @@
 
-QT += core gui widgets charts
+QT += core gui widgets charts network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -14,6 +14,7 @@ SOURCES += \
     mainwindow.cpp \
     exportdialog.cpp \
     generator.cpp \
+    serwer.cpp \
     simulation.cpp \
     arx.cpp \
     chartwidget.cpp \
@@ -24,6 +25,7 @@ HEADERS += \
     mainwindow.h \
     exportdialog.h \
     generator.h \
+    serwer.h \
     simulation.h \
     arx.h \
     chartwidget.h \
@@ -34,7 +36,8 @@ FORMS += \
     mainwindow.ui \
     exportdialog.ui \
     arxchangeparameters.ui \
-    chartwidget.ui
+    chartwidget.ui \
+    serwer.ui
 
 
 # Default rules for deployment.

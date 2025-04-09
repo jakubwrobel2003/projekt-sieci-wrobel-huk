@@ -430,3 +430,93 @@ void MainWindow::openArxDialog()
     dialog.exec(); // <-- jeśli tu crashuje, to problem w konstruktorze dialogu
     qDebug() << "Po zamknięciu dialogu";
 }
+
+void MainWindow::on_btnPolacz_clicked()
+{
+    serwer dlg(this); // otwierasz własny dialog z IP/PORT/TRYB
+
+    if (dlg.exec() == QDialog::Accepted)
+    {
+        QString ip = dlg.getIP();
+        quint16 port = dlg.getPort();
+        QString tryb = dlg.getTryb();
+
+        ui->ip->setText("IP: " + ip);
+        ui->port->setText("Port: " + QString::number(port));
+
+        if (tryb == "klient")
+        {
+            if (clientSocket)
+            {
+                clientSocket->disconnectFromHost();
+                clientSocket->deleteLater();
+            }
+
+            clientSocket = new QTcpSocket(this);
+
+            connect(clientSocket, &QTcpSocket::connected, this, &MainWindow::onClientConnected);
+            connect(clientSocket, &QTcpSocket::disconnected, this, &MainWindow::onClientDisconnected);
+            connect(clientSocket, QOverload<QAbstractSocket::SocketError>::of(&QTcpSocket::errorOccurred),
+                    this, &MainWindow::onClientError);
+
+            clientSocket->connectToHost(ip, port);
+            ui->Status->setText("🔄 Łączenie z serwerem...");
+        }
+        else if (tryb == "serwer")
+        {
+            if (server)
+            {
+                server->close();
+                server->deleteLater();
+            }
+
+            server = new QTcpServer(this);
+
+            connect(server, &QTcpServer::newConnection, this, &MainWindow::onServerNewConnection);
+
+            if (server->listen(QHostAddress::Any, port))
+            {
+                ui->Status->setText("🟢 Serwer nasłuchuje na porcie " + QString::number(port));
+            }
+            else
+            {
+                ui->Status->setText("❌ Błąd serwera: " + server->errorString());
+            }
+        }
+        else
+        {
+           // QMessageBox::warning(this, "Błąd", "Nie wybrano trybu (klient/serwer).");
+        }
+    }
+}
+
+void MainWindow::onClientConnected()
+{
+    ui->Status->setText("Połączono z serwerem");
+}
+
+void MainWindow::onClientDisconnected()
+{
+
+    ui->Status->setText("Rozłączono z serwerem");
+    clientSocket->deleteLater();
+    clientSocket = nullptr;
+}
+
+void MainWindow::onClientError(QAbstractSocket::SocketError socketError)
+{
+    Q_UNUSED(socketError)
+    ui->Status->setText("Błąd połączenia: " + clientSocket->errorString());
+    clientSocket->deleteLater();
+    clientSocket = nullptr;
+}
+
+void MainWindow::onServerNewConnection()
+{
+    QTcpSocket *newClient = server->nextPendingConnection();
+    connect(newClient, &QTcpSocket::disconnected, newClient, &QTcpSocket::deleteLater);
+    ui->Status->setText("Nowe połączenie od " + newClient->peerAddress().toString());
+    // Tutaj możesz dodać dalszą obsługę nowego klienta
+}
+
+
