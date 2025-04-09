@@ -52,3 +52,25 @@ compile_commands.json
 *creator.user*
 
 *_qmlcache.qrc
+
+# Qt Creator
+*.pro.user*
+*.autosave
+.qtc_clangd/
+
+# Build
+build/
+*.o
+*.obj
+*.exe
+*.log
+*.idx
+
+# CMake (jeśli używasz)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# build folders
+build/
