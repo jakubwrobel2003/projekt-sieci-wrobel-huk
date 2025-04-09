@@ -72,3 +72,21 @@ CMakeLists.txt.user*
 *.dll
 *.exe
 
+# Qt Creator
+*.pro.user*
+*.autosave
+.qtc_clangd/
+
+# Build
+build/
+*.o
+*.obj
+*.exe
+*.log
+*.idx
+
+# CMake (jeśli używasz)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
