@@ -474,6 +474,18 @@ void MainWindow::on_btnPolacz_clicked()
         ui->pid_ti_input->setEnabled(false);
         ui->radioButton->setEnabled(false);
         ui->btnPolacz->setText("ROZŁĄCZ");
+        if (!clientSocket->waitForConnected(5000)) // 5000 ms = 5 sekund
+        {
+            ui->Status->setText("Nie udało się połączyć z serwerem: " + clientSocket->errorString());
+            clientSocket->deleteLater();
+            clientSocket = nullptr;
+            ui->btnPolacz->setText("POŁĄCZ");
+            ui->pid_kp_input->setEnabled(true);
+            ui->pid_td_input->setEnabled(true);
+            ui->pid_ti_input->setEnabled(true);
+            ui->radioButton->setEnabled(true);
+            return;
+        }
     }
     else if (tryb == "serwer")
     {
@@ -548,6 +560,10 @@ void MainWindow::bladPolaczeniaKlienta(QAbstractSocket::SocketError blad)
     ui->Status->setText("Błąd połączenia: " + clientSocket->errorString());
     //clientSocket->deleteLater();
     //clientSocket = nullptr;
+    ui->pid_kp_input->setEnabled(true);
+    ui->pid_td_input->setEnabled(true);
+    ui->pid_ti_input->setEnabled(true);
+    ui->radioButton->setEnabled(true);
     ui->btnPolacz->setText("POŁĄCZ");
 }
 
@@ -593,6 +609,10 @@ void MainWindow::rozlaczKlienta()
 
     clientSocket->disconnectFromHost();
     ui->Status->setText("Rozłączono z serwerem (na żądanie)");
+    ui->pid_kp_input->setEnabled(true);
+    ui->pid_td_input->setEnabled(true);
+    ui->pid_ti_input->setEnabled(true);
+    ui->radioButton->setEnabled(true);
     ui->btnPolacz->setText("POŁĄCZ");
 }
 
@@ -606,7 +626,8 @@ void MainWindow::zatrzymajSerwer()
         clientConnection->disconnectFromHost();
         clientConnection = nullptr;
     }
-
+    ui->ip->setText("");
+    ui->port->setText("");
     server->close();
     ui->ArxButton->setEnabled(true);
     ui->Status->setText("Serwer zatrzymany");
