@@ -23,10 +23,16 @@ public:
     ~MainWindow();
 
 private slots:
-    void onClientConnected();
-    void onClientDisconnected();
-    void onClientError(QAbstractSocket::SocketError socketError);
-    void onServerNewConnection();
+    void przyPolaczeniuKlienta();
+    void przyRozlaczeniuKlienta();
+    void bladPolaczeniaKlienta(QAbstractSocket::SocketError blad);
+    void nowePolaczenieNaSerwerze();
+
+    void ustawPolaczeniaKlienta();
+    void ustawPolaczeniaSerwera();
+    void rozlaczKlienta();
+    void zatrzymajSerwer();
+
 
     void simulation_start();
     void simulation_stop();
@@ -81,5 +87,6 @@ private:
     Ui::MainWindow *ui;
     QTcpSocket *clientSocket = nullptr;
     QTcpServer *server = nullptr;
+    QTcpSocket *clientConnection = nullptr;
 };
 #endif // MAINWINDOW_H

@@ -25,7 +25,7 @@ serwer::~serwer()
     delete ui;
 }
 QString serwer::getIP() const {
-    return ui->IP->toPlainText(); // jeśli QTextEdit
+    return ui->IP->toPlainText();
 }
 
 quint16 serwer::getPort() const {

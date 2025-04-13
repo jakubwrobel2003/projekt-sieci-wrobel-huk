@@ -20,6 +20,8 @@ public:
 
 private:
     Ui::serwer *ui;
+    QString  ip="";
+    QString  port="";
 };
 
 #endif // SERWER_H

@@ -5,7 +5,7 @@
 #include "./ui_mainwindow.h"
 #include "arxchangeparameters.h"
 #include "exportdialog.h"
-
+#include <QThread>
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -427,96 +427,188 @@ void MainWindow::openArxDialog()
 {
     qDebug() << "Przed otwarciem dialogu";
     ArxChangeParameters dialog(this);
-    dialog.exec(); // <-- jeśli tu crashuje, to problem w konstruktorze dialogu
+    dialog.exec();
     qDebug() << "Po zamknięciu dialogu";
 }
 
 void MainWindow::on_btnPolacz_clicked()
 {
-    serwer dlg(this); // otwierasz własny dialog z IP/PORT/TRYB
-
-    if (dlg.exec() == QDialog::Accepted)
+    if (clientSocket && clientSocket->state() == QAbstractSocket::ConnectedState)
     {
-        QString ip = dlg.getIP();
-        quint16 port = dlg.getPort();
-        QString tryb = dlg.getTryb();
+        rozlaczKlienta();
+        return;
+    }
 
-        ui->ip->setText("IP: " + ip);
-        ui->port->setText("Port: " + QString::number(port));
+    if (server && server->isListening())
+    {
+        zatrzymajSerwer();
+        return;
+    }
 
-        if (tryb == "klient")
+    serwer dlg(this);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    QString ip = dlg.getIP();
+    quint16 port = dlg.getPort();
+    QString tryb = dlg.getTryb();
+
+    ui->ip->setText("IP: " + ip);
+    ui->port->setText("Port: " + QString::number(port));
+
+    if (tryb == "klient")
+    {
+        if (clientSocket)
         {
-            if (clientSocket)
-            {
-                clientSocket->disconnectFromHost();
-                clientSocket->deleteLater();
-            }
-
-            clientSocket = new QTcpSocket(this);
-
-            connect(clientSocket, &QTcpSocket::connected, this, &MainWindow::onClientConnected);
-            connect(clientSocket, &QTcpSocket::disconnected, this, &MainWindow::onClientDisconnected);
-            connect(clientSocket, QOverload<QAbstractSocket::SocketError>::of(&QTcpSocket::errorOccurred),
-                    this, &MainWindow::onClientError);
-
-            clientSocket->connectToHost(ip, port);
-            ui->Status->setText("🔄 Łączenie z serwerem...");
+            clientSocket->disconnectFromHost();
+            clientSocket->deleteLater();
         }
-        else if (tryb == "serwer")
+
+        clientSocket = new QTcpSocket(this);
+        ustawPolaczeniaKlienta();
+        clientSocket->connectToHost(ip, port);
+
+        ui->Status->setText("Łączenie z serwerem...");
+        ui->pid_kp_input->setEnabled(false);
+        ui->pid_td_input->setEnabled(false);
+        ui->pid_ti_input->setEnabled(false);
+        ui->radioButton->setEnabled(false);
+        ui->btnPolacz->setText("ROZŁĄCZ");
+    }
+    else if (tryb == "serwer")
+    {
+        if (server)
         {
-            if (server)
-            {
-                server->close();
-                server->deleteLater();
-            }
+            server->close();
+            server->deleteLater();
+        }
 
-            server = new QTcpServer(this);
+        server = new QTcpServer(this);
+        ustawPolaczeniaSerwera();
 
-            connect(server, &QTcpServer::newConnection, this, &MainWindow::onServerNewConnection);
-
-            if (server->listen(QHostAddress::Any, port))
-            {
-                ui->Status->setText("🟢 Serwer nasłuchuje na porcie " + QString::number(port));
-            }
-            else
-            {
-                ui->Status->setText("❌ Błąd serwera: " + server->errorString());
-            }
+        if (server->listen(QHostAddress::AnyIPv4, port))
+        {
+            ui->Status->setText("Serwer nasłuchuje na porcie " + QString::number(port));
+            ui->btnPolacz->setText("ROZŁĄCZ");
+            ui->ArxButton->setEnabled(false);
         }
         else
         {
-           // QMessageBox::warning(this, "Błąd", "Nie wybrano trybu (klient/serwer).");
+            ui->Status->setText("Błąd serwera: " + server->errorString());
+            ui->ArxButton->setEnabled(true);
         }
     }
 }
 
-void MainWindow::onClientConnected()
+void MainWindow::ustawPolaczeniaKlienta()
+{
+    connect(clientSocket, &QTcpSocket::connected, this, &MainWindow::przyPolaczeniuKlienta);
+    connect(clientSocket, &QTcpSocket::disconnected, this, &MainWindow::przyRozlaczeniuKlienta);
+    connect(clientSocket, QOverload<QAbstractSocket::SocketError>::of(&QTcpSocket::errorOccurred),
+            this, &MainWindow::bladPolaczeniaKlienta);
+}
+
+void MainWindow::ustawPolaczeniaSerwera()
+{
+    connect(server, &QTcpServer::newConnection, this, &MainWindow::nowePolaczenieNaSerwerze);
+}
+
+void MainWindow::przyPolaczeniuKlienta()
 {
     ui->Status->setText("Połączono z serwerem");
 }
 
-void MainWindow::onClientDisconnected()
+void MainWindow::przyRozlaczeniuKlienta()
 {
+    QString statusText;
 
-    ui->Status->setText("Rozłączono z serwerem");
-    clientSocket->deleteLater();
-    clientSocket = nullptr;
+    if (clientSocket && clientSocket->state() == QAbstractSocket::UnconnectedState)
+    {
+        statusText = "Połączenie z serwerem zostało przerwane (serwer zamknięty)";
+    }
+    else
+    {
+        statusText = "Rozłączono z serwerem";
+    }
+    ui->ip->setText("");
+    ui->port->setText("");
+    ui->Status->setText(statusText);
+    //clientSocket->deleteLater();
+   // clientSocket = nullptr;
+    ui->pid_kp_input->setEnabled(true);
+    ui->pid_td_input->setEnabled(true);
+    ui->pid_ti_input->setEnabled(true);
+    ui->radioButton->setEnabled(true);
+    ui->btnPolacz->setText("POŁĄCZ");
 }
 
-void MainWindow::onClientError(QAbstractSocket::SocketError socketError)
+void MainWindow::bladPolaczeniaKlienta(QAbstractSocket::SocketError blad)
 {
-    Q_UNUSED(socketError)
+    Q_UNUSED(blad)
     ui->Status->setText("Błąd połączenia: " + clientSocket->errorString());
-    clientSocket->deleteLater();
-    clientSocket = nullptr;
+    //clientSocket->deleteLater();
+    //clientSocket = nullptr;
+    ui->btnPolacz->setText("POŁĄCZ");
 }
 
-void MainWindow::onServerNewConnection()
+void MainWindow::nowePolaczenieNaSerwerze()
 {
-    QTcpSocket *newClient = server->nextPendingConnection();
-    connect(newClient, &QTcpSocket::disconnected, newClient, &QTcpSocket::deleteLater);
-    ui->Status->setText("Nowe połączenie od " + newClient->peerAddress().toString());
-    // Tutaj możesz dodać dalszą obsługę nowego klienta
+    clientConnection = server->nextPendingConnection();
+
+    QString ip = clientConnection->peerAddress().toString();
+    ip.remove('[').remove(']');
+    if (ip == "::1") ip = "127.0.0.1";
+
+    connect(clientConnection, &QTcpSocket::readyRead, this, [=]() {
+        QByteArray data = clientConnection->readAll();
+        QString message = QString::fromUtf8(data).trimmed();
+
+        if (message == "DISCONNECT")
+        {
+            ui->Status->setText("Klient " + ip + " poinformował o rozłączeniu");
+            qDebug() << "Klient " << ip << " poinformował o rozłączeniu";
+        }
+        else
+        {
+            qDebug() << "Odebrano wiadomość od klienta:" << message;
+        }
+    });
+
+    connect(clientConnection, &QTcpSocket::disconnected, this, [=]() {
+        ui->Status->setText("Klient " + ip + " został rozłączony");
+        qDebug() << "Klient " << ip << " został rozłączony";
+        clientConnection->deleteLater();
+        clientConnection = nullptr;
+    });
+
+    ui->Status->setText("Nowe połączenie od " + ip);
+    qDebug() << "Nowe połączenie od" << ip;
 }
 
+void MainWindow::rozlaczKlienta()
+{
+    clientSocket->write("DISCONNECT\n");
+    clientSocket->flush();
+    QThread::msleep(100);
 
+    clientSocket->disconnectFromHost();
+    ui->Status->setText("Rozłączono z serwerem (na żądanie)");
+    ui->btnPolacz->setText("POŁĄCZ");
+}
+
+void MainWindow::zatrzymajSerwer()
+{
+    if (clientConnection)
+    {
+        clientConnection->write("DISCONNECT\n");
+        clientConnection->flush();
+        QThread::msleep(100);
+        clientConnection->disconnectFromHost();
+        clientConnection = nullptr;
+    }
+
+    server->close();
+    ui->ArxButton->setEnabled(true);
+    ui->Status->setText("Serwer zatrzymany");
+    ui->btnPolacz->setText("POŁĄCZ");
+}
