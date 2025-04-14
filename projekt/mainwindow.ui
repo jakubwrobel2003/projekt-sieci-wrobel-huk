@@ -27,7 +27,7 @@
         </property>
         <property name="maximumSize">
          <size>
-          <width>200</width>
+          <width>500</width>
           <height>16777215</height>
          </size>
         </property>
@@ -119,6 +119,18 @@
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="minimumSize">
+         <size>
+          <width>300</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>500</width>
+          <height>16777215</height>
+         </size>
+        </property>
         <property name="title">
          <string>Połączenie sieciowe</string>
         </property>
@@ -202,7 +214,7 @@
         </property>
         <property name="maximumSize">
          <size>
-          <width>200</width>
+          <width>500</width>
           <height>16777215</height>
          </size>
         </property>
@@ -260,7 +272,7 @@
         </property>
         <property name="maximumSize">
          <size>
-          <width>200</width>
+          <width>500</width>
           <height>16777215</height>
          </size>
         </property>

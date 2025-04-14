@@ -82,7 +82,7 @@ private slots:
 
 private:
     void init();
-
+    QTimer* polaczenieTimer = nullptr;
     Simulation &simulation;
     Ui::MainWindow *ui;
     QTcpSocket *clientSocket = nullptr;

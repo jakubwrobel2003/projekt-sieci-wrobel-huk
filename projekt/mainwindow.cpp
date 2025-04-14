@@ -466,27 +466,41 @@ void MainWindow::on_btnPolacz_clicked()
 
         clientSocket = new QTcpSocket(this);
         ustawPolaczeniaKlienta();
-        clientSocket->connectToHost(ip, port);
 
+        // Anuluj poprzedni timer jeśli istniał
+        if (polaczenieTimer)
+        {
+            polaczenieTimer->stop();
+            polaczenieTimer->deleteLater();
+        }
+
+        polaczenieTimer = new QTimer(this);
+        polaczenieTimer->setSingleShot(true);
+        connect(polaczenieTimer, &QTimer::timeout, this, [=]() {
+            if (clientSocket && clientSocket->state() != QAbstractSocket::ConnectedState)
+            {
+                ui->Status->setText("Nie udało się połączyć z serwerem (timeout)");
+                clientSocket->abort(); // przerywa próbę połączenia
+                clientSocket->deleteLater();
+                clientSocket = nullptr;
+                ui->btnPolacz->setText("POŁĄCZ");
+                ui->pid_kp_input->setEnabled(true);
+                ui->pid_td_input->setEnabled(true);
+                ui->pid_ti_input->setEnabled(true);
+                ui->radioButton->setEnabled(true);
+            }
+        });
+        polaczenieTimer->start(5000); // 5 sekund
+
+        clientSocket->connectToHost(ip, port);
         ui->Status->setText("Łączenie z serwerem...");
         ui->pid_kp_input->setEnabled(false);
         ui->pid_td_input->setEnabled(false);
         ui->pid_ti_input->setEnabled(false);
         ui->radioButton->setEnabled(false);
         ui->btnPolacz->setText("ROZŁĄCZ");
-        if (!clientSocket->waitForConnected(5000)) // 5000 ms = 5 sekund
-        {
-            ui->Status->setText("Nie udało się połączyć z serwerem:\n " + clientSocket->errorString());
-            clientSocket->deleteLater();
-            clientSocket = nullptr;
-            ui->btnPolacz->setText("POŁĄCZ");
-            ui->pid_kp_input->setEnabled(true);
-            ui->pid_td_input->setEnabled(true);
-            ui->pid_ti_input->setEnabled(true);
-            ui->radioButton->setEnabled(true);
-            return;
-        }
     }
+
     else if (tryb == "serwer")
     {
         if (server)
@@ -524,9 +538,15 @@ void MainWindow::ustawPolaczeniaSerwera()
 {
     connect(server, &QTcpServer::newConnection, this, &MainWindow::nowePolaczenieNaSerwerze);
 }
-
 void MainWindow::przyPolaczeniuKlienta()
 {
+    if (polaczenieTimer)
+    {
+        polaczenieTimer->stop();
+        polaczenieTimer->deleteLater();
+        polaczenieTimer = nullptr;
+    }
+
     ui->Status->setText("Połączono z serwerem");
 }
 
@@ -553,13 +573,18 @@ void MainWindow::przyRozlaczeniuKlienta()
     ui->radioButton->setEnabled(true);
     ui->btnPolacz->setText("POŁĄCZ");
 }
-
 void MainWindow::bladPolaczeniaKlienta(QAbstractSocket::SocketError blad)
 {
     Q_UNUSED(blad)
+
+    if (polaczenieTimer)
+    {
+        polaczenieTimer->stop();
+        polaczenieTimer->deleteLater();
+        polaczenieTimer = nullptr;
+    }
+
     ui->Status->setText("Błąd połączenia: " + clientSocket->errorString());
-    //clientSocket->deleteLater();
-    //clientSocket = nullptr;
     ui->pid_kp_input->setEnabled(true);
     ui->pid_td_input->setEnabled(true);
     ui->pid_ti_input->setEnabled(true);
