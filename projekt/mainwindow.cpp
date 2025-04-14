@@ -476,7 +476,7 @@ void MainWindow::on_btnPolacz_clicked()
         ui->btnPolacz->setText("ROZŁĄCZ");
         if (!clientSocket->waitForConnected(5000)) // 5000 ms = 5 sekund
         {
-            ui->Status->setText("Nie udało się połączyć z serwerem: " + clientSocket->errorString());
+            ui->Status->setText("Nie udało się połączyć z serwerem:\n " + clientSocket->errorString());
             clientSocket->deleteLater();
             clientSocket = nullptr;
             ui->btnPolacz->setText("POŁĄCZ");
@@ -500,7 +500,7 @@ void MainWindow::on_btnPolacz_clicked()
 
         if (server->listen(QHostAddress::AnyIPv4, port))
         {
-            ui->Status->setText("Serwer nasłuchuje na porcie " + QString::number(port));
+            ui->Status->setText("Serwer nasłuchuje na porcie\n " + QString::number(port));
             ui->btnPolacz->setText("ROZŁĄCZ");
             ui->ArxButton->setEnabled(false);
         }
@@ -536,7 +536,7 @@ void MainWindow::przyRozlaczeniuKlienta()
 
     if (clientSocket && clientSocket->state() == QAbstractSocket::UnconnectedState)
     {
-        statusText = "Połączenie z serwerem zostało przerwane (serwer zamknięty)";
+        statusText = "Połączenie z serwerem zostało przerwane\n (serwer zamknięty)";
     }
     else
     {
