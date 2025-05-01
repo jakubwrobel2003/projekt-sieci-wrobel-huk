@@ -1,9 +1,10 @@
 #ifndef SIMULATION_H
 #define SIMULATION_H
 
+#include <qudpsocket.h>
+
 #include <QMainWindow>
 #include <QObject>
-
 #include "arx.h"
 #include "generator.h"
 #include "pid.h"
@@ -34,12 +35,26 @@ struct SimulationFrame
 
     float arx_output;
     float noise;
+
+
+
 };
 
 class Simulation : public QObject
 {
     Q_OBJECT
 public:
+    void initialize_udp_receiver();  // deklaracja
+
+    //
+    //udp
+    //
+    bool network =false;
+    bool isServer = false;
+    QUdpSocket udpSocket;
+    QByteArray buffer;
+    //
+
     static Simulation &get_instance();
 
     void start();
@@ -86,6 +101,7 @@ protected:
 
 private:
     void simulate();
+    void emit_frame_to_chart(const SimulationFrame& frame);
 
     float ticks_per_second{60};
     size_t tick{0};

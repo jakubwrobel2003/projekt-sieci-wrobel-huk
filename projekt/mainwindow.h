@@ -22,7 +22,11 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+
 private slots:
+
+    void dodajPunktNaWykres(QString nazwaSerii, float y, ChartPosition pozycja);
+
     void przyPolaczeniuKlienta();
     void przyRozlaczeniuKlienta();
     void bladPolaczeniaKlienta(QAbstractSocket::SocketError blad);

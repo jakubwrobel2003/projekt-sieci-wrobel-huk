@@ -1,12 +1,79 @@
 #include "simulation.h"
 
+
+struct GeneratorPacket {
+    size_t tick;
+    float generator;
+    float p;
+    float i;
+    float d;
+    float error;
+    float arx_output;
+    float pid_output;  // <- nowo dodane pole
+
+    // Serializacja
+    friend QDataStream& operator<<(QDataStream& out, const GeneratorPacket& data) {
+        out << data.tick
+            << data.generator
+            << data.p
+            << data.i
+            << data.d
+            << data.error
+            << data.arx_output
+            << data.pid_output;  // <- dopisane
+        return out;
+    }
+
+    // Deserializacja
+    friend QDataStream& operator>>(QDataStream& in, GeneratorPacket& data) {
+        in >> data.tick
+            >> data.generator
+            >> data.p
+            >> data.i
+            >> data.d
+            >> data.error
+            >> data.arx_output
+            >> data.pid_output;  // <- dopisane
+        return in;
+    }
+};
+
+
+
+
+
+
 Simulation::Simulation(QObject *parent)
     : QObject{parent}
 {
     this->pid = std::make_unique<PID>();
     this->generator = std::make_unique<Generator>();
     this->arx = std::make_unique<ARX>();
+
+
+
+
+    //
+
 }
+
+void Simulation::initialize_udp_receiver()
+{
+    if (!network || isServer) return;
+
+    if (udpSocket.state() == QAbstractSocket::UnconnectedState) {
+        if (!udpSocket.bind(1234, QUdpSocket::ShareAddress)) {
+            qWarning() << "Nie udało się zbindować UDP: " << udpSocket.errorString();
+            return;
+        }
+        qDebug() << "UDP zbindowane na porcie 1234";
+
+    }
+    qDebug() << "Odebrano datagram";
+    qDebug() << "Odebrano datagram";
+
+}
+
 
 Simulation &Simulation::get_instance()
 {
@@ -40,25 +107,142 @@ void memcopy_s(void *dest, const T &src, size_t size = 1)
     std::memcpy(dest, &src, sizeof(T) * size);
 }
 
+
+void Simulation::emit_frame_to_chart(const SimulationFrame& frame)
+{
+    emit this->add_series("PID P", frame.p, ChartPosition::top);
+    emit this->add_series("PID I", frame.i, ChartPosition::top);
+    emit this->add_series("PID D", frame.d, ChartPosition::top);
+    emit this->add_series("PID Output", frame.pid_output, ChartPosition::top);
+    emit this->add_series("Generator Output", frame.geneartor_output, ChartPosition::middle);
+    emit this->add_series("Error", frame.error, ChartPosition::middle);
+    emit this->add_series("ARX Output", frame.arx_output, ChartPosition::bottom);
+    emit this->add_series("Noise", frame.noise, ChartPosition::middle);
+    emit this->update_chart();
+}
+
+
 void Simulation::simulate()
 {
     static float error = 0;
     static float arx_output = 0;
     static float pid_output = 0;
     static float generator = 0;
+    SimulationFrame frame;
 
     const size_t tick = this->get_tick();
     const float time = tick / this->ticks_per_second;
 
-    generator = this->generator->run(time);
+    if (!network) {
+        generator = this->generator->run(time);
+        error = generator - arx_output;
+        pid_output = this->pid->run(error);
+        arx_output = this->arx->run(pid_output);
 
-    error = generator - arx_output;
+        frame.tick = tick;
+        frame.geneartor_output = generator;
+        frame.p = this->pid->proportional_part;
+        frame.i = this->pid->integral_part;
+        frame.d = this->pid->derivative_part;
+        frame.pid_output = pid_output;
+        frame.error = error;
+        frame.arx_output = arx_output;
+        frame.noise = this->arx->noise_part;
 
-    pid_output = this->pid->run(error);
+        this->frames.push_back(frame);
+        emit_frame_to_chart(frame);
+        this->tick++;
+    } else {
+        if (isServer) {
+            generator = this->generator->run(time);
+            arx_output = generator * 0.9f;
+            error = generator - arx_output;
+            pid_output = this->pid->run(error);
 
-    arx_output = this->arx->run(pid_output);
+            GeneratorPacket packet{
+                .tick = tick,
+                .generator = generator,
+                .p = this->pid->proportional_part,
+                .i = this->pid->integral_part,
+                .d = this->pid->derivative_part,
+                .error = error,
+                .arx_output = arx_output,
+                .pid_output = pid_output
+            };
 
-    SimulationFrame frame{
+            QByteArray datagram;
+            QDataStream out(&datagram, QIODevice::WriteOnly);
+            out.setVersion(QDataStream::Qt_6_0);
+            out << packet;
+            udpSocket.writeDatagram(datagram, QHostAddress("127.0.0.1"), 1234);
+            qDebug() << "[SERVER] Wysłano tick:" << tick << "generator:" << generator;
+
+            frame.tick = tick;
+            frame.geneartor_output = generator;
+            frame.p = packet.p;
+            frame.i = packet.i;
+            frame.d = packet.d;
+            frame.pid_output = packet.pid_output;
+            frame.error = packet.error;
+            frame.arx_output = packet.arx_output;
+            frame.noise = this->arx->noise_part;
+
+            this->frames.push_back(frame);
+            emit_frame_to_chart(frame);
+            this->tick++;
+        } else {
+            while (udpSocket.hasPendingDatagrams()) {
+                QByteArray buffer;
+                buffer.resize(udpSocket.pendingDatagramSize());
+                udpSocket.readDatagram(buffer.data(), buffer.size());
+
+                QDataStream in(&buffer, QIODevice::ReadOnly);
+                in.setVersion(QDataStream::Qt_6_0);
+
+                GeneratorPacket packet;
+                in >> packet;
+
+                frame.tick = packet.tick;
+                frame.geneartor_output = packet.generator;
+                frame.p = packet.p;
+                frame.i = packet.i;
+                frame.d = packet.d;
+                frame.pid_output = packet.pid_output;
+                frame.error = packet.error;
+                frame.arx_output = packet.arx_output;
+                frame.noise = 0.0f;
+
+                this->frames.push_back(frame);
+                emit_frame_to_chart(frame);
+
+                qDebug().noquote() << QString(
+                                          "\n[CLIENT] Odebrano dane:\n"
+                                          "  ▸ Tick:              %1\n"
+                                          "  ▸ Generator:         %2\n"
+                                          "  ▸ PID P:             %3\n"
+                                          "  ▸ PID I:             %4\n"
+                                          "  ▸ PID D:             %5\n"
+                                          "  ▸ PID Output:        %6\n"
+                                          "  ▸ Error:             %7\n"
+                                          "  ▸ ARX Output:        %8\n"
+                                          ).arg(frame.tick)
+                                          .arg(frame.geneartor_output)
+                                          .arg(frame.p)
+                                          .arg(frame.i)
+                                          .arg(frame.d)
+                                          .arg(frame.pid_output)
+                                          .arg(frame.error)
+                                          .arg(frame.arx_output);
+                this->tick=frame.tick;
+            }
+        }
+    }
+}
+
+
+
+
+   /* SimulationFrame frame{
         .tick = tick,
         .geneartor_output = generator,
         .p = this->pid->proportional_part,
@@ -84,10 +268,8 @@ void Simulation::simulate()
     emit this->add_series("ARX", arx_output, ChartPosition::bottom);
     emit this->add_series("Noise", this->arx->noise_part, ChartPosition::middle);
 
-    emit this->update_chart();
+    emit this->update_chart();*/
 
-    this->tick++;
-}
 
 void Simulation::set_ticks_per_second(float ticks_per_second)
 {

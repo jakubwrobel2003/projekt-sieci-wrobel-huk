@@ -34,7 +34,18 @@ MainWindow::MainWindow(QWidget *parent)
             &MainWindow::action_simulation_open);
 
     connect(ui->ArxButton, &QPushButton::clicked, this, &MainWindow::openArxDialog);
+
+    connect(&simulation, &Simulation::add_series,
+            this, &MainWindow::dodajPunktNaWykres);
 }
+
+
+void MainWindow::dodajPunktNaWykres(QString nazwaSerii, float y, ChartPosition pozycja)
+{
+    qDebug() << "[GUI] Dodawanie do wykresu ->" << nazwaSerii << ": " << y << "(pozycja:" << static_cast<int>(pozycja) << ")";
+    // Tutaj potem dodasz np. chart->series(nazwaSerii)->append(...)
+}
+
 
 void MainWindow::action_simulation_open()
 {
@@ -457,7 +468,9 @@ void MainWindow::on_btnPolacz_clicked()
     ui->port->setText("Port: " + QString::number(port));
 
     if (tryb == "klient")
-    {
+    { simulation.network=true;
+        simulation.isServer=false;
+
         if (clientSocket)
         {
             clientSocket->disconnectFromHost();
@@ -503,6 +516,8 @@ void MainWindow::on_btnPolacz_clicked()
 
     else if (tryb == "serwer")
     {
+        simulation.network=true;
+        simulation.isServer=true;
         if (server)
         {
             server->close();
@@ -548,6 +563,9 @@ void MainWindow::przyPolaczeniuKlienta()
     }
 
     ui->Status->setText("Połączono z serwerem");
+    simulation.initialize_udp_receiver();
+    simulation.start();
+
 }
 
 void MainWindow::przyRozlaczeniuKlienta()
