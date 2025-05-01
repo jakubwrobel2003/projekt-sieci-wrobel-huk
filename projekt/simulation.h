@@ -103,6 +103,10 @@ private:
     void simulate();
     void emit_frame_to_chart(const SimulationFrame& frame);
 
+
+    QUdpSocket udpSocketResponse; // nowy socket dla odpowiedzi od klienta
+    float last_arx_from_client = 0.0f; // tutaj zapiszemy wartość z klienta
+    float last_noise_from_client = 0.0f;
     float ticks_per_second{60};
     size_t tick{0};
     size_t timer_id{0};
