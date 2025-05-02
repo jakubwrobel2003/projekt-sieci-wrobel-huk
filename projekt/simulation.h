@@ -49,6 +49,9 @@ public:
     //
     //udp
     //
+    bool simulation_started_by_udp = false;
+ bool client_data_received = false;
+
     bool network =false;
     bool isServer = false;
     QUdpSocket udpSocket;
@@ -89,6 +92,7 @@ public:
     void deserialize(std::vector<std::byte> data);
 
 signals:
+      void communication_status(bool ok);
     void simulation_start();
     void simulation_stop();
 

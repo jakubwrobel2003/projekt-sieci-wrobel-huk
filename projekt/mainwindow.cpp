@@ -564,9 +564,10 @@ void MainWindow::przyPolaczeniuKlienta()
 
     ui->Status->setText("Połączono z serwerem");
     simulation.initialize_udp_receiver();
-    simulation.start();
+
 
 }
+
 
 void MainWindow::przyRozlaczeniuKlienta()
 {

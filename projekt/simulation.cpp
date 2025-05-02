@@ -1,5 +1,11 @@
 #include "simulation.h"
 
+enum class PacketType : quint8 {
+    StartSignal = 0,        // 🔹 nowy pakiet
+    Generator = 1,
+    ClientResponse = 2
+};
+
 
 struct ClientResponsePacket {
     size_t tick;
@@ -66,32 +72,24 @@ Simulation::Simulation(QObject *parent)
     this->pid = std::make_unique<PID>();
     this->generator = std::make_unique<Generator>();
     this->arx = std::make_unique<ARX>();
-
-
-
-
-    //
-
+    this->client_data_received = false;
 }
 
 void Simulation::initialize_udp_receiver()
 {
-    if (!network || isServer) return;
+    if (!network) return;
 
     if (udpSocket.state() == QAbstractSocket::UnconnectedState) {
-        if (!udpSocket.bind(1234, QUdpSocket::ShareAddress)) {
-            qWarning() << "Nie udało się zbindować UDP: " << udpSocket.errorString();
+        quint16 bindPort = isServer ? 1234 : 1235;
+        if (!udpSocket.bind(bindPort, QUdpSocket::ShareAddress)) {
+            qWarning() << "Nie udało się zbindować UDP na porcie " << bindPort << ": " << udpSocket.errorString();
             return;
         }
-        qDebug() << "UDP zbindowane na porcie 1234";
-
+        qDebug() << "[UDP] Zbindowano port " << bindPort;
     }
-    qDebug() << "Odebrano datagram";
-    qDebug() << "Odebrano datagram";
-
-
-
 }
+
+
 
 
 Simulation &Simulation::get_instance()
@@ -148,111 +146,35 @@ void Simulation::simulate()
     static float pid_output = 0;
     static float generator = 0;
     SimulationFrame frame;
+    this->client_data_received = false;
 
     const size_t tick = this->get_tick();
     const float time = tick / this->ticks_per_second;
 
-    if (!network) {
-        // Tryb lokalny
-        generator = this->generator->run(time);
-        error = generator - arx_output;
-        pid_output = this->pid->run(error);
-        arx_output = this->arx->run(pid_output);
+    while (udpSocket.hasPendingDatagrams()) {
+        QByteArray buffer;
+        buffer.resize(udpSocket.pendingDatagramSize());
+        QHostAddress sender;
+        quint16 senderPort;
+        udpSocket.readDatagram(buffer.data(), buffer.size(), &sender, &senderPort);
 
-        frame.tick = tick;
-        frame.geneartor_output = generator;
-        frame.p = this->pid->proportional_part;
-        frame.i = this->pid->integral_part;
-        frame.d = this->pid->derivative_part;
-        frame.pid_output = pid_output;
-        frame.error = error;
-        frame.arx_output = arx_output;
-        frame.noise = this->arx->noise_part;
+        QDataStream in(&buffer, QIODevice::ReadOnly);
+        in.setVersion(QDataStream::Qt_6_0);
 
-        this->frames.push_back(frame);
-        emit_frame_to_chart(frame);
-        this->tick++;
-        return;
-    }
+        quint8 typeRaw;
+        in >> typeRaw;
+        PacketType type = static_cast<PacketType>(typeRaw);
 
-    if (isServer) {
-        // 🟦 1. Ręczne zbindowanie odbiornika (tylko raz)
-        if (udpSocketResponse.state() == QAbstractSocket::UnconnectedState) {
-            if (!udpSocketResponse.bind(1235, QUdpSocket::ShareAddress)) {
-                qWarning() << "[SERVER] Nie udało się zbindować portu 1235: " << udpSocketResponse.errorString();
-            } else {
-                qDebug() << "[SERVER] Zbindowano port 1235 do odbioru odpowiedzi klienta";
+        if (!isServer && type == PacketType::StartSignal) {
+            if (!simulation_started_by_udp && !is_running) {
+                this->timer_id = this->startTimer(this->interval);
+                this->is_running = true;
+                simulation_started_by_udp = true;
+                emit this->simulation_start();
+                qDebug() << "[CLIENT] Odebrano START – uruchamiam symulację";
             }
         }
-
-        // 🟦 2. Ręczne odebranie odpowiedzi od klienta
-        while (udpSocketResponse.hasPendingDatagrams()) {
-            QByteArray buffer;
-            buffer.resize(udpSocketResponse.pendingDatagramSize());
-            udpSocketResponse.readDatagram(buffer.data(), buffer.size());
-
-            QDataStream in(&buffer, QIODevice::ReadOnly);
-            in.setVersion(QDataStream::Qt_6_0);
-
-            ClientResponsePacket response;
-            in >> response;
-
-            this->last_arx_from_client = response.arx_output;
-            this->last_noise_from_client = response.zaklucenie;
-
-            qDebug() << "[SERVER] Odebrano ARX z klienta: tick=" << response.tick
-                     << " arx_output=" << response.arx_output
-                     << " noise=" << response.zaklucenie;
-        }
-
-        // 🟦 3. Wykonanie symulacji na serwerze
-        generator = this->generator->run(time);
-        arx_output = this->last_arx_from_client;
-        error = generator - arx_output;
-        pid_output = this->pid->run(error);
-
-        GeneratorPacket packet{
-            .tick = tick,
-            .generator = generator,
-            .p = this->pid->proportional_part,
-            .i = this->pid->integral_part,
-            .d = this->pid->derivative_part,
-            .error = error,
-            .arx_output = arx_output,
-            .pid_output = pid_output
-        };
-
-        QByteArray datagram;
-        QDataStream out(&datagram, QIODevice::WriteOnly);
-        out.setVersion(QDataStream::Qt_6_0);
-        out << packet;
-
-        udpSocket.writeDatagram(datagram, QHostAddress("127.0.0.1"), 1234);
-        qDebug() << "[SERVER] Wysłano tick:" << tick << " generator=" << generator;
-
-        frame.tick = tick;
-        frame.geneartor_output = generator;
-        frame.p = packet.p;
-        frame.i = packet.i;
-        frame.d = packet.d;
-        frame.pid_output = packet.pid_output;
-        frame.error = packet.error;
-        frame.arx_output = packet.arx_output;
-        frame.noise = this->last_noise_from_client;
-
-        this->frames.push_back(frame);
-        emit_frame_to_chart(frame);
-        this->tick++;
-    } else {
-        // 🟨 KLIENT
-        while (udpSocket.hasPendingDatagrams()) {
-            QByteArray buffer;
-            buffer.resize(udpSocket.pendingDatagramSize());
-            udpSocket.readDatagram(buffer.data(), buffer.size());
-
-            QDataStream in(&buffer, QIODevice::ReadOnly);
-            in.setVersion(QDataStream::Qt_6_0);
-
+        else if (!isServer && type == PacketType::Generator) {
             GeneratorPacket packet;
             in >> packet;
 
@@ -274,26 +196,86 @@ void Simulation::simulate()
             emit_frame_to_chart(frame);
             this->tick = frame.tick;
 
-            ClientResponsePacket response{
-                .tick = packet.tick,
-                .arx_output = arx_with_noise,
-                .zaklucenie = noise
-            };
+            ClientResponsePacket response{ packet.tick, arx_with_noise, noise };
 
             QByteArray responseData;
             QDataStream responseOut(&responseData, QIODevice::WriteOnly);
             responseOut.setVersion(QDataStream::Qt_6_0);
+            responseOut << static_cast<quint8>(PacketType::ClientResponse);
             responseOut << response;
 
-            udpSocket.writeDatagram(responseData, QHostAddress("127.0.0.1"), 1235);
-            qDebug() << "[CLIENT] Wysłano: tick=" << response.tick
+            udpSocket.writeDatagram(responseData, QHostAddress::LocalHost, 1234);
+            qDebug() << "[CLIENT] Odesłano: tick=" << response.tick << " arx_output=" << response.arx_output;
+        }
+        else if (isServer && type == PacketType::ClientResponse) {
+            ClientResponsePacket response;
+            in >> response;
+            last_arx_from_client = response.arx_output;
+            last_noise_from_client = response.zaklucenie;
+            client_data_received = true;
+
+            qDebug() << "[SERVER] Odebrano ARX: tick=" << response.tick
                      << " arx_output=" << response.arx_output
-                     << " noise=" << noise;
+                     << " noise=" << response.zaklucenie;
         }
     }
+
+    if (!network) {
+        generator = this->generator->run(time);
+        error = generator - arx_output;
+        pid_output = this->pid->run(error);
+        arx_output = this->arx->run(pid_output);
+    }
+    else if (isServer) {
+        generator = this->generator->run(time);
+        arx_output = last_arx_from_client;
+        error = generator - arx_output;
+        pid_output = this->pid->run(error);
+
+        GeneratorPacket packet{tick, generator, pid->proportional_part, pid->integral_part, pid->derivative_part,
+                               error, arx_output, pid_output};
+
+        QByteArray datagram;
+        QDataStream out(&datagram, QIODevice::WriteOnly);
+        out.setVersion(QDataStream::Qt_6_0);
+        out << static_cast<quint8>(PacketType::Generator);
+        out << packet;
+
+        udpSocket.writeDatagram(datagram, QHostAddress::LocalHost, 1235);
+        qDebug() << "[SERVER] Wysłano tick=" << tick << " generator=" << generator;
+
+        frame.tick = tick;
+        frame.geneartor_output = generator;
+        frame.p = this->pid->proportional_part;
+        frame.i = this->pid->integral_part;
+        frame.d = this->pid->derivative_part;
+        frame.pid_output = pid_output;
+        frame.error = error;
+        frame.arx_output = arx_output;
+        frame.noise = last_noise_from_client;
+
+        this->frames.push_back(frame);
+        emit_frame_to_chart(frame);
+
+        emit this->communication_status(client_data_received);
+    }
+    else if (!network) {
+        frame.tick = tick;
+        frame.geneartor_output = generator;
+        frame.p = this->pid->proportional_part;
+        frame.i = this->pid->integral_part;
+        frame.d = this->pid->derivative_part;
+        frame.pid_output = pid_output;
+        frame.error = error;
+        frame.arx_output = arx_output;
+        frame.noise = this->arx->noise_part;
+
+        this->frames.push_back(frame);
+        emit_frame_to_chart(frame);
+    }
+
+    this->tick++;
 }
-
-
 
 
 
@@ -338,12 +320,25 @@ void Simulation::timerEvent(QTimerEvent *event)
 
 void Simulation::start()
 {
-    const int temp = std::max({this->interval, 30});
 
-    this->timer_id = this->startTimer((temp));
-    this->is_running = true;
+        const int temp = std::max({this->interval, 30});
+        this->timer_id = this->startTimer(temp);
+        this->is_running = true;
 
-    emit this->simulation_start();
+        emit this->simulation_start();
+
+        // 🔷 TYLKO serwer wysyła sygnał START
+        if (network && isServer) {
+            QByteArray datagram;
+            QDataStream out(&datagram, QIODevice::WriteOnly);
+            out.setVersion(QDataStream::Qt_6_0);
+            out << static_cast<quint8>(PacketType::StartSignal);
+
+            udpSocket.writeDatagram(datagram, QHostAddress("127.0.0.1"), 1234);  // <-- lub IP klienta
+            qDebug() << "[SERVER] Wysłano sygnał START do klienta";
+        }
+
+
 }
 
 void Simulation::reset()
