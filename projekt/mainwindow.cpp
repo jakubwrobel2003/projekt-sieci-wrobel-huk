@@ -35,16 +35,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->ArxButton, &QPushButton::clicked, this, &MainWindow::openArxDialog);
 
-    connect(&simulation, &Simulation::add_series,
-            this, &MainWindow::dodajPunktNaWykres);
+
 }
 
 
-void MainWindow::dodajPunktNaWykres(QString nazwaSerii, float y, ChartPosition pozycja)
-{
-    qDebug() << "[GUI] Dodawanie do wykresu ->" << nazwaSerii << ": " << y << "(pozycja:" << static_cast<int>(pozycja) << ")";
-    // Tutaj potem dodasz np. chart->series(nazwaSerii)->append(...)
-}
 
 
 void MainWindow::action_simulation_open()

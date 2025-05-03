@@ -25,7 +25,6 @@ public:
 
 private slots:
 
-    void dodajPunktNaWykres(QString nazwaSerii, float y, ChartPosition pozycja);
 
     void przyPolaczeniuKlienta();
     void przyRozlaczeniuKlienta();

@@ -91,6 +91,14 @@ public:
     std::vector<std::byte> serialize();
     void deserialize(std::vector<std::byte> data);
 
+
+    void simulate_local();
+    void simulate_server();
+    void simulate_client();
+
+
+
+
 signals:
       void communication_status(bool ok);
     void simulation_start();
