@@ -21,14 +21,26 @@ void Simulation::send_arx_config()
     QByteArray data;
     QDataStream out(&data, QIODevice::WriteOnly);
     out.setVersion(QDataStream::Qt_6_0);
-
-    // ❌ NIE dodawaj type oddzielnie – operator<< już go zawiera
     out << packet;
 
-    udpSocket.writeDatagram(data, QHostAddress("127.0.0.1"), 1234);
+    // 🟡 DEBUG – szczegółowe logowanie
+    qDebug() << "[CLIENT] Wysyłany ConfigARX:";
+    qDebug() << "  a = [";
+    for (float val : packet.a) qDebug() << "    " << val;
+    qDebug() << "  ]";
+
+    qDebug() << "  b = [";
+    for (float val : packet.b) qDebug() << "    " << val;
+    qDebug() << "  ]";
+
+    qDebug() << "  delay =" << packet.delay;
+    qDebug() << "  noise =" << packet.noise;
+    qDebug() << "  noise_type =" << static_cast<int>(packet.noise_type);
+    qDebug() << "  Rozmiar pakietu =" << data.size() << "bajtów";
 
 
-    qDebug() << "[CLIENT] Wysłano ConfigARX. Rozmiar pakietu:" << data.size();
+    udpSocket.writeDatagram(data, QHostAddress("127.0.0.1"), 1222);
+    qDebug() << "[CLIENT] Wysłano ConfigARX na port 1222";
 }
 
 
@@ -83,16 +95,15 @@ Simulation::Simulation(QObject *parent)
     //
 
 }
-
 void Simulation::initialize_udp_receiver()
 {
-    quint16 port = 1234;
-
-    if (!udpSocket.bind(QHostAddress("127.0.0.1"), port,
+    // GŁÓWNY SOCKET - port 1234
+    quint16 mainPort = 1234;
+    if (!udpSocket.bind(QHostAddress("127.0.0.1"), mainPort,
                         QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) {
-        qWarning() << "[UDP] Nie udało się zbindować portu" << port << ":" << udpSocket.errorString();
+        qWarning() << "[UDP] Nie udało się zbindować portu" << mainPort << ":" << udpSocket.errorString();
     } else {
-        qDebug() << "[UDP] Zbindowano port" << port;
+        qDebug() << "[UDP] Zbindowano port" << mainPort;
         connect(&udpSocket, &QUdpSocket::readyRead, this, [this]() {
             if (!this->network) return;
             if (this->isServer) {
@@ -103,7 +114,57 @@ void Simulation::initialize_udp_receiver()
         });
     }
 
+    // SOCKET dla ConfigARX - port 1222 (tylko serwer)
+    if (isServer) {
+        quint16 arxPort = 1222;
+        if (!ARXudpSocketResponse.bind(QHostAddress("127.0.0.1"), arxPort,
+                                       QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) {
+            qWarning() << "[ARX-SOCKET] Nie udało się zbindować portu" << arxPort << ":" << ARXudpSocketResponse.errorString();
+        } else {
+            qDebug() << "[ARX-SOCKET] Zbindowano port" << arxPort;
+            connect(&ARXudpSocketResponse, &QUdpSocket::readyRead, this, [this]() {
+                while (ARXudpSocketResponse.hasPendingDatagrams()) {
+                    QByteArray buffer;
+                    QHostAddress sender;
+                    quint16 senderPort;
+                    buffer.resize(ARXudpSocketResponse.pendingDatagramSize());
+                    ARXudpSocketResponse.readDatagram(buffer.data(), buffer.size(), &sender, &senderPort);
+
+                    QDataStream in(&buffer, QIODevice::ReadOnly);
+                    in.setVersion(QDataStream::Qt_6_0);
+                    quint8 typeByte;
+                    in >> typeByte;
+
+                    if (static_cast<PacketType>(typeByte) == PacketType::ConfigARX) {
+                        in.device()->seek(0);
+                        ConfigARXPacket packet;
+                        in >> packet;
+
+                        // ✅ Ustawienie parametrów ARX
+                        arx->set_a(packet.a);
+                        arx->set_b(packet.b);
+                        arx->set_delay(packet.delay);
+                        arx->set_noise(packet.noise);
+                        arx->set_noise_type(packet.noise_type);
+
+                        // ✅ Szczegółowy debug
+                        qDebug() << "[ARX-SOCKET] Odebrano ConfigARX na porcie 1222:";
+                        qDebug() << "  a = [";
+                        for (float val : packet.a) qDebug() << "    " << val;
+                        qDebug() << "  ]";
+                        qDebug() << "  b = [";
+                        for (float val : packet.b) qDebug() << "    " << val;
+                        qDebug() << "  ]";
+                        qDebug() << "  delay =" << packet.delay;
+                        qDebug() << "  noise =" << packet.noise;
+                        qDebug() << "  noise_type =" << static_cast<int>(packet.noise_type);
+                    }
+                }
+            });
+        }
+    }
 }
+
 
 
 
@@ -219,27 +280,7 @@ void Simulation::simulate_server() {
         qDebug() << "[SERVER] Typ pakietu (typeByte):" << static_cast<int>(typeByte);
 
 
-        if (static_cast<PacketType>(typeByte) == PacketType::ConfigARX) {
-            QDataStream in(&buffer, QIODevice::ReadOnly);
-            in.setVersion(QDataStream::Qt_6_0);
-            in.device()->seek(0); // bardzo ważne
 
-            ConfigARXPacket packet;
-            in >> packet;
-
-            arx->set_a(packet.a);
-            arx->set_b(packet.b);
-            arx->set_delay(packet.delay);
-            arx->set_noise(packet.noise);
-            arx->set_noise_type(packet.noise_type);
-
-            qDebug() << "[SERVER] Odebrano ConfigARX: a.size=" << packet.a.size()
-                     << "b.size=" << packet.b.size()
-                     << "delay=" << packet.delay
-                     << "noise=" << packet.noise;
-
-            continue;
-        }
 
 
 

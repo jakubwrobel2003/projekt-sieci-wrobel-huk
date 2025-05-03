@@ -461,9 +461,7 @@ void MainWindow::openArxDialog()
     qDebug() << "Przed otwarciem dialogu";
     ArxChangeParameters dialog(this);
      dialog.exec();
-        QTimer::singleShot(200, []() {
-        Simulation::get_instance().send_arx_config();
-        });
+
 
         simulation.send_arx_config();
 
@@ -563,6 +561,8 @@ void MainWindow::on_btnPolacz_clicked()
             ui->Status->setText("Serwer nasłuchuje na porcie\n " + QString::number(port));
             ui->btnPolacz->setText("ROZŁĄCZ");
             ui->ArxButton->setEnabled(false);
+            simulation.initialize_udp_receiver();
+
         }
         else
         {
