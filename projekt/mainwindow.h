@@ -25,12 +25,11 @@ public:
 
 private slots:
 
-
+    void apply_config(const ConfigServerPacket& packet);
     void przyPolaczeniuKlienta();
     void przyRozlaczeniuKlienta();
     void bladPolaczeniaKlienta(QAbstractSocket::SocketError blad);
     void nowePolaczenieNaSerwerze();
-
     void ustawPolaczeniaKlienta();
     void ustawPolaczeniaSerwera();
     void rozlaczKlienta();

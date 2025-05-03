@@ -1,78 +1,70 @@
 #include "simulation.h"
 
 
-enum class PacketType : quint8 {
-    StartSignal = 0,
-    Generator = 1,
-    ClientResponse = 2,
-     ResetCommand = 3 // << DODANE
-};
+void Simulation::send_arx_config()
+{
+    qDebug() << "[CLIENT] Próba wysłania ConfigARX";
 
-struct ClientResponsePacket {
-    PacketType type = PacketType::ClientResponse;
-    size_t tick;
-    float arx_output;
-    float zaklucenie;
-
-    friend QDataStream& operator<<(QDataStream& out, const ClientResponsePacket& data) {
-        out << static_cast<quint8>(data.type)
-        << data.tick
-        << data.arx_output
-        << data.zaklucenie;
-        return out;
+    if (!network || isServer) {
+        qDebug() << "[CLIENT] NIE wysyłam – warunki niespełnione";
+        return;
     }
 
-    friend QDataStream& operator>>(QDataStream& in, ClientResponsePacket& data) {
-        quint8 typeByte;
-        in >> typeByte;
-        data.type = static_cast<PacketType>(typeByte);
-        in >> data.tick >> data.arx_output >> data.zaklucenie;
-        return in;
-    }
-};
+    ConfigARXPacket packet{
+        .a = arx->get_a(),
+        .b = arx->get_b(),
+        .delay = arx->get_delay(),
+        .noise = arx->get_noise(),
+        .noise_type = arx->get_noise_type()
+    };
+
+    QByteArray data;
+    QDataStream out(&data, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_6_0);
+
+    // ❌ NIE dodawaj type oddzielnie – operator<< już go zawiera
+    out << packet;
+
+    udpSocket.writeDatagram(data, QHostAddress("127.0.0.1"), 1234);
+
+
+    qDebug() << "[CLIENT] Wysłano ConfigARX. Rozmiar pakietu:" << data.size();
+}
 
 
 
-struct GeneratorPacket {
-    PacketType type = PacketType::Generator;
-    size_t tick;
-    float generator;
-    float p;
-    float i;
-    float d;
-    float error;
-    float arx_output;
-    float pid_output;
 
-    friend QDataStream& operator<<(QDataStream& out, const GeneratorPacket& data) {
-        out << static_cast<quint8>(data.type)
-        << data.tick
-        << data.generator
-        << data.p
-        << data.i
-        << data.d
-        << data.error
-        << data.arx_output
-        << data.pid_output;
-        return out;
-    }
 
-    friend QDataStream& operator>>(QDataStream& in, GeneratorPacket& data) {
-        quint8 typeByte;
-        in >> typeByte;
-        data.type = static_cast<PacketType>(typeByte);
-        in >> data.tick
-            >> data.generator
-            >> data.p
-            >> data.i
-            >> data.d
-            >> data.error
-            >> data.arx_output
-            >> data.pid_output;
-        return in;
-    }
-};
+void Simulation::send_config()
+{
+    if (!network || !isServer) return;
 
+    ConfigServerPacket config {
+        .interval = this->interval,
+        .duration = this->durration,
+        .pid_kp = pid->get_kp(),
+        .pid_ti = pid->get_ti(),
+        .pid_td = pid->get_td(),
+        .pid_ti_pullout = pid->get_integral_mode_pillout(),  // ✅ poprawiona literówka
+        .generator_amplitude = generator->get_amplitude(),
+        .generator_frequency = generator->get_frequency(),
+        .generator_type = generator->get_type()
+    };
+
+    QByteArray data;
+    QDataStream out(&data, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_6_0);
+    out << config;
+
+    udpSocket.writeDatagram(data, QHostAddress("127.0.0.1"), 1234);
+      // lub dynamicznie np. clientIP
+    qDebug() << "[SERVER] Wysłano ConfigServerPacket:"
+             << "interval =" << config.interval
+             << "duration =" << config.duration
+             << "Kp =" << config.pid_kp
+             << "Ti =" << config.pid_ti
+             << "Td =" << config.pid_td;
+}
 
 
 
@@ -94,22 +86,26 @@ Simulation::Simulation(QObject *parent)
 
 void Simulation::initialize_udp_receiver()
 {
-    if (udpSocket.state() == QAbstractSocket::UnconnectedState) {
-        if (!udpSocket.bind(1234, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) {
-            qWarning() << "[UDP] Nie udało się zbindować: " << udpSocket.errorString();
-        } else {
-            qDebug() << "[UDP] Zbindowano port 1234";
+    quint16 port = 1234;
 
-            // 🔥 Reaguj na każdy przychodzący pakiet – nawet bez startu
-            connect(&udpSocket, &QUdpSocket::readyRead, this, [this]() {
-                if (this->network && !this->isServer) {
-                    // Klient odbierze pakiet i zinterpretuje go (StartSignal itp.)
-                    this->simulate_client();
-                }
-            });
-        }
+    if (!udpSocket.bind(QHostAddress("127.0.0.1"), port,
+                        QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) {
+        qWarning() << "[UDP] Nie udało się zbindować portu" << port << ":" << udpSocket.errorString();
+    } else {
+        qDebug() << "[UDP] Zbindowano port" << port;
+        connect(&udpSocket, &QUdpSocket::readyRead, this, [this]() {
+            if (!this->network) return;
+            if (this->isServer) {
+                this->simulate_server();
+            } else {
+                this->simulate_client();
+            }
+        });
     }
+
 }
+
+
 
 
 
@@ -204,20 +200,67 @@ void Simulation::simulate_server() {
         buffer.resize(udpSocket.pendingDatagramSize());
         udpSocket.readDatagram(buffer.data(), buffer.size(), &sender, &senderPort);
 
-        QDataStream in(&buffer, QIODevice::ReadOnly);
-        in.setVersion(QDataStream::Qt_6_0);
+        QDataStream peek(&buffer, QIODevice::ReadOnly);
+        peek.setVersion(QDataStream::Qt_6_0);
         quint8 typeByte;
-        in >> typeByte;
+        peek >> typeByte;
+        PacketType type = static_cast<PacketType>(typeByte);
+
+        qDebug() << "[SERVER] Odebrano pakiet typu:" << static_cast<int>(typeByte);
+
+
+        // 🔴 FILTR: jeśli serwer odbiera swój własny pakiet – ignoruj
+        if (sender.toString() == "127.0.0.1" && senderPort == 1234 &&
+            (type == PacketType::ConfigServer || type == PacketType::StartSignal || type == PacketType::ResetCommand)) {
+            qDebug() << "[SERVER] Ignoruję własny pakiet typu" << static_cast<int>(type);
+            continue;
+        }
+
+        qDebug() << "[SERVER] Typ pakietu (typeByte):" << static_cast<int>(typeByte);
+
+
+        if (static_cast<PacketType>(typeByte) == PacketType::ConfigARX) {
+            QDataStream in(&buffer, QIODevice::ReadOnly);
+            in.setVersion(QDataStream::Qt_6_0);
+            in.device()->seek(0); // bardzo ważne
+
+            ConfigARXPacket packet;
+            in >> packet;
+
+            arx->set_a(packet.a);
+            arx->set_b(packet.b);
+            arx->set_delay(packet.delay);
+            arx->set_noise(packet.noise);
+            arx->set_noise_type(packet.noise_type);
+
+            qDebug() << "[SERVER] Odebrano ConfigARX: a.size=" << packet.a.size()
+                     << "b.size=" << packet.b.size()
+                     << "delay=" << packet.delay
+                     << "noise=" << packet.noise;
+
+            continue;
+        }
+
+
+
+
+
+
 
         if (static_cast<PacketType>(typeByte) == PacketType::ClientResponse) {
-            in.device()->seek(0);
+            QDataStream in(&buffer, QIODevice::ReadOnly);  // <-- TUTAJ dodajesz strumień
+            in.setVersion(QDataStream::Qt_6_0);
+
             ClientResponsePacket response;
             in >> response;
+
             this->last_arx_from_client = response.arx_output;
             this->last_noise_from_client = response.zaklucenie;
 
             qDebug() << "[SERVER] Odebrano odpowiedź: tick=" << response.tick;
+            continue;
         }
+
     }
 
     // OBLICZENIA
@@ -274,12 +317,37 @@ void Simulation::simulate_client() {
         QDataStream in(&buffer, QIODevice::ReadOnly);
         in.setVersion(QDataStream::Qt_6_0);
 
-        // Odczytaj typ pakietu
         quint8 typeByte;
         in >> typeByte;
         PacketType type = static_cast<PacketType>(typeByte);
 
-        // 🔹 StartSignal: uruchom timer ręcznie
+        qDebug() << "[CLIENT] Odebrano pakiet typu:" << static_cast<int>(type)
+                 << "z" << sender.toString() << ":" << senderPort;
+        qDebug() << "[CLIENT] Odebrano bajty:" << buffer.toHex();
+
+
+
+
+        if (type == PacketType::ConfigServer) {
+            in.device()->seek(0);
+            ConfigServerPacket packet;
+            in >> packet;
+
+            pid->set_kp(packet.pid_kp);
+            pid->set_ti(packet.pid_ti);
+            pid->set_td(packet.pid_td);
+            pid->set_integral_mode_pullout(packet.pid_ti_pullout);
+            generator->set_amplitude(packet.generator_amplitude);
+            generator->set_frequency(packet.generator_frequency);
+            generator->set_type(packet.generator_type);
+            this->interval = packet.interval;
+            this->durration = packet.duration;
+
+            emit config_server_received(packet);
+            qDebug() << "[CLIENT] Odebrano konfigurację serwera";
+            continue;
+        }
+
         if (type == PacketType::StartSignal) {
             qDebug() << "[CLIENT] Odebrano StartSignal – uruchamiam timer";
             if (!this->is_running) {
@@ -291,7 +359,6 @@ void Simulation::simulate_client() {
             continue;
         }
 
-        // 🔹 ResetCommand
         if (type == PacketType::ResetCommand) {
             qDebug() << "[CLIENT] Odebrano RESET – wykonuję reset ARX";
             this->arx->reset();
@@ -301,13 +368,12 @@ void Simulation::simulate_client() {
             continue;
         }
 
-        // 🔹 Odrzuć nie-Generator
         if (type != PacketType::Generator) {
             qWarning() << "[CLIENT] Odrzucono pakiet: nie Generator";
             continue;
         }
 
-        // 🔹 GeneratorPacket – odczyt
+        // GeneratorPacket
         in.device()->seek(0);
         GeneratorPacket packet;
         in >> packet;
@@ -323,22 +389,23 @@ void Simulation::simulate_client() {
         float arx_output = this->arx->run(packet.pid_output);
         float arx_with_noise = arx_output + noise;
 
-        SimulationFrame frame;
-        frame.tick = packet.tick;
-        frame.geneartor_output = packet.generator;
-        frame.p = packet.p;
-        frame.i = packet.i;
-        frame.d = packet.d;
-        frame.pid_output = packet.pid_output;
-        frame.error = packet.error;
-        frame.arx_output = arx_output;
-        frame.noise = noise;
+        SimulationFrame frame{
+            .tick = packet.tick,
+            .geneartor_output = packet.generator,
+            .p = packet.p,
+            .i = packet.i,
+            .d = packet.d,
+            .pid_output = packet.pid_output,
+            .error = packet.error,
+            .arx_output = arx_output,
+            .noise = noise
+        };
 
         this->frames.push_back(frame);
         emit_frame_to_chart(frame);
         this->tick = packet.tick;
 
-        // 🔹 Odpowiedź do serwera
+        // Odpowiedź do serwera
         ClientResponsePacket response{
             .type = PacketType::ClientResponse,
             .tick = packet.tick,
@@ -354,6 +421,7 @@ void Simulation::simulate_client() {
         qDebug() << "[CLIENT] Wysłano odpowiedź: tick=" << response.tick;
     }
 }
+
 
 
 
@@ -415,23 +483,31 @@ void Simulation::timerEvent(QTimerEvent *event)
 void Simulation::start()
 {
     const int interval_ms = std::max(this->interval, 30);
-    if (this->is_running) return;
+    qDebug() << "[SIMULATION] start() wywołane, isServer=" << isServer;
+
+    if (this->is_running) {
+        qDebug() << "[SIMULATION] Już działa, pomijam start";
+        return;
+    }
 
     this->timer_id = this->startTimer(interval_ms);
     this->is_running = true;
+    qDebug() << "[SIMULATION] startTimer OK, interval =" << interval_ms;
 
-    // 🔴 TYLKO jeśli to serwer – wyślij sygnał startu
+    // 🔴 TYLKO serwer wysyła StartSignal do klienta (na ten sam port: 1234)
     if (network && isServer) {
         QByteArray startPacket;
         QDataStream out(&startPacket, QIODevice::WriteOnly);
         out.setVersion(QDataStream::Qt_6_0);
         out << static_cast<quint8>(PacketType::StartSignal);
-        udpSocket.writeDatagram(startPacket, QHostAddress("127.0.0.1"), 1234);
-        qDebug() << "[SERVER] Wysłano StartSignal do klienta";
+
+        udpSocket.writeDatagram(startPacket, QHostAddress("127.0.0.1"), 1234);  // ten sam port
+        qDebug() << "[SERVER] Wysłano StartSignal do klienta (na 127.0.0.1:1234)";
     }
 
-    emit this->simulation_start();
+    emit this->simulation_start();  // może być użyte do GUI
 }
+
 
 void Simulation::reset()
 {
@@ -453,8 +529,8 @@ void Simulation::reset()
 
         out << static_cast<quint8>(PacketType::ResetCommand);
 
-        udpSocket.writeDatagram(resetPacket, QHostAddress("127.0.0.1"), 1234); // lub klienta IP, jeśli zdalnie
-        qDebug() << "[SERVER] Wysłano RESET do klienta";
+        udpSocket.writeDatagram(resetPacket, QHostAddress("127.0.0.1"), 1234);  // poprawny port klienta
+         qDebug() << "[SERVER] Wysłano RESET do klienta";
     }
 }
 

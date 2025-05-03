@@ -9,6 +9,173 @@
 #include "generator.h"
 #include "pid.h"
 
+
+enum class PacketType : quint8 {
+    StartSignal = 0,
+    Generator = 1,
+    ClientResponse = 2,
+    ResetCommand = 3,
+    ConfigServer = 4,  // konfiguracja PID i generatora (wysyłana przez serwer)
+    ConfigARX =5     // konfiguracja ARX (wysyłana przez klienta)
+};
+
+
+struct ConfigARXPacket {
+    PacketType type = PacketType::ConfigARX;
+    std::vector<float> a;
+    std::vector<float> b;
+    size_t delay;
+    float noise;
+    NoiseType noise_type;
+
+    friend QDataStream& operator<<(QDataStream& out, const ConfigARXPacket& data) {
+        out << static_cast<quint8>(data.type)
+        << static_cast<quint32>(data.a.size());
+        for (float val : data.a) out << val;
+        out << static_cast<quint32>(data.b.size());
+        for (float val : data.b) out << val;
+        out << static_cast<quint32>(data.delay)
+            << data.noise
+            << static_cast<qint32>(data.noise_type);
+        return out;
+    }
+
+    friend QDataStream& operator>>(QDataStream& in, ConfigARXPacket& data) {
+        quint8 typeByte;
+        in >> typeByte;
+        data.type = static_cast<PacketType>(typeByte);
+
+        quint32 aSize;
+        in >> aSize;
+        data.a.resize(aSize);
+        for (quint32 i = 0; i < aSize; ++i) in >> data.a[i];
+
+        quint32 bSize;
+        in >> bSize;
+        data.b.resize(bSize);
+        for (quint32 i = 0; i < bSize; ++i) in >> data.b[i];
+
+        quint32 delay;
+        qint32 noiseTypeInt;
+        in >> delay >> data.noise >> noiseTypeInt;
+
+        data.delay = delay;
+        data.noise_type = static_cast<NoiseType>(noiseTypeInt);
+        return in;
+    }
+};
+
+
+
+struct ConfigServerPacket {
+    PacketType type = PacketType::ConfigServer;
+    int interval;
+    float duration;
+    float pid_kp;
+    float pid_ti;
+    float pid_td;
+    bool pid_ti_pullout;
+    float generator_amplitude;
+    float generator_frequency;
+    GeneratorType generator_type;
+
+    friend QDataStream& operator<<(QDataStream& out, const ConfigServerPacket& data) {
+        out << static_cast<quint8>(data.type)
+        << data.interval
+        << data.duration
+        << data.pid_kp << data.pid_ti << data.pid_td
+        << data.pid_ti_pullout
+        << data.generator_amplitude << data.generator_frequency
+        << static_cast<qint32>(data.generator_type);
+        return out;
+    }
+
+    friend QDataStream& operator>>(QDataStream& in, ConfigServerPacket& data) {
+        quint8 typeByte;
+        qint32 generatorTypeInt;
+        in >> typeByte;
+        data.type = static_cast<PacketType>(typeByte);
+        in >> data.interval
+            >> data.duration
+            >> data.pid_kp >> data.pid_ti >> data.pid_td
+            >> data.pid_ti_pullout
+            >> data.generator_amplitude >> data.generator_frequency
+            >> generatorTypeInt;
+        data.generator_type = static_cast<GeneratorType>(generatorTypeInt);
+        return in;
+    }
+};
+
+
+
+
+struct ClientResponsePacket {
+    PacketType type = PacketType::ClientResponse;
+    size_t tick;
+    float arx_output;
+    float zaklucenie;
+
+    friend QDataStream& operator<<(QDataStream& out, const ClientResponsePacket& data) {
+        out << static_cast<quint8>(data.type)
+        << data.tick
+        << data.arx_output
+        << data.zaklucenie;
+        return out;
+    }
+
+    friend QDataStream& operator>>(QDataStream& in, ClientResponsePacket& data) {
+        quint8 typeByte;
+        in >> typeByte;
+        data.type = static_cast<PacketType>(typeByte);
+        in >> data.tick >> data.arx_output >> data.zaklucenie;
+        return in;
+    }
+};
+
+
+
+struct GeneratorPacket {
+    PacketType type = PacketType::Generator;
+    size_t tick;
+    float generator;
+    float p;
+    float i;
+    float d;
+    float error;
+    float arx_output;
+    float pid_output;
+
+    friend QDataStream& operator<<(QDataStream& out, const GeneratorPacket& data) {
+        out << static_cast<quint8>(data.type)
+        << data.tick
+        << data.generator
+        << data.p
+        << data.i
+        << data.d
+        << data.error
+        << data.arx_output
+        << data.pid_output;
+        return out;
+    }
+
+    friend QDataStream& operator>>(QDataStream& in, GeneratorPacket& data) {
+        quint8 typeByte;
+        in >> typeByte;
+        data.type = static_cast<PacketType>(typeByte);
+        in >> data.tick
+            >> data.generator
+            >> data.p
+            >> data.i
+            >> data.d
+            >> data.error
+            >> data.arx_output
+            >> data.pid_output;
+        return in;
+    }
+};
+
+
+
 enum class ChartPosition {
     top,
     middle,
@@ -49,6 +216,9 @@ public:
     //
     //udp
     //
+
+    void send_arx_config();
+    void send_config();
     bool simulation_started_by_udp = false;
  bool client_data_received = false;
 
@@ -128,6 +298,17 @@ private:
     ~Simulation();
 
 signals:
+
+
+    void config_arx_received(const ConfigARXPacket&);
+    void config_server_received(const ConfigServerPacket&);
+
+
 };
+
+
+
+
+
 
 #endif // SIMULATION_H

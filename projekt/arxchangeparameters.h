@@ -21,6 +21,8 @@ public:
     void on_arx_b_input_editingFinished();
     void on_arx_a_input_editingFinished();
 
+public slots:
+      void apply_arx_packet(const ConfigARXPacket& packet);
 private:
     Ui::ArxChangeParameters *ui;
     void onOkClicked();

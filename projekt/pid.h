@@ -26,7 +26,9 @@ public:
     float run(float error);
 
     void reset();
-
+    bool get_integral_mode_pillout(){
+        return integral_mode_pullout;
+    }
     void set_integral_mode_pullout(bool mode);
 
 private:

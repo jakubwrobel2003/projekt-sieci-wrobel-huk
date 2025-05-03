@@ -35,6 +35,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->ArxButton, &QPushButton::clicked, this, &MainWindow::openArxDialog);
 
+    connect(&simulation, &Simulation::config_server_received,
+            this, &MainWindow::apply_config);
 
 }
 
@@ -107,6 +109,8 @@ void MainWindow::action_simulation_open()
         file.close();
     }
 }
+
+
 
 void MainWindow::action_simulation_export()
 {
@@ -235,6 +239,21 @@ void MainWindow::action_open()
     qDebug() << "opened";
 }
 
+
+void MainWindow::apply_config(const ConfigServerPacket& packet)
+{
+    ui->simulation_interval_input->setValue(packet.interval);
+    ui->simulation_duration_input->setValue(packet.duration);
+    ui->pid_kp_input->setValue(packet.pid_kp);
+    ui->pid_ti_input->setValue(packet.pid_ti);
+    ui->pid_td_input->setValue(packet.pid_td);
+    ui->radioButton->setChecked(!packet.pid_ti_pullout);
+    ui->generator_amplitude_input->setValue(packet.generator_amplitude);
+    ui->generator_frequency_input->setValue(packet.generator_frequency);
+    ui->generator_generatortype_input->setCurrentIndex(static_cast<int>(packet.generator_type));
+}
+
+
 void MainWindow::init()
 {
     // simulation
@@ -282,6 +301,7 @@ void MainWindow::init()
 
     this->ui->arx_b_input->setText(b_values.join(","));
 */
+
 }
 
 void MainWindow::simulation_start()
@@ -316,44 +336,50 @@ void MainWindow::on_simulation_stop_button_clicked()
     this->simulation.stop();
 }
 
-void MainWindow::on_simulation_duration_input_editingFinished()
-{
+void MainWindow::on_simulation_duration_input_editingFinished() {
     if (this->simulation.is_running)
         this->simulation.stop();
 
     this->simulation.set_duration(this->ui->simulation_duration_input->value());
-    ;
+    simulation.send_config();
 }
 
-void MainWindow::on_pid_ti_input_editingFinished()
-{
-    this->simulation.pid->set_ti(this->ui->pid_ti_input->value());
-}
-
-void MainWindow::on_pid_td_input_editingFinished()
-{
-    this->simulation.pid->set_td(this->ui->pid_td_input->value());
-}
-
-void MainWindow::on_pid_kp_input_editingFinished()
-{
+void MainWindow::on_pid_kp_input_editingFinished() {
     this->simulation.pid->set_kp(this->ui->pid_kp_input->value());
+    simulation.send_config();
 }
 
-void MainWindow::on_generator_amplitude_input_editingFinished()
-{
+void MainWindow::on_pid_ti_input_editingFinished() {
+    this->simulation.pid->set_ti(this->ui->pid_ti_input->value());
+    simulation.send_config();
+}
+
+void MainWindow::on_pid_td_input_editingFinished() {
+    this->simulation.pid->set_td(this->ui->pid_td_input->value());
+    simulation.send_config();
+}
+
+
+void MainWindow::on_generator_amplitude_input_editingFinished() {
     this->simulation.generator->set_amplitude(this->ui->generator_amplitude_input->value());
+    simulation.send_config();
 }
 
-void MainWindow::on_generator_frequency_input_editingFinished()
-{
+void MainWindow::on_generator_frequency_input_editingFinished() {
     this->simulation.generator->set_frequency(this->ui->generator_frequency_input->value());
+    simulation.send_config();
 }
 
-void MainWindow::on_generator_generatortype_input_currentIndexChanged(int index)
-{
-    this->simulation.generator->set_type(static_cast<GeneratorType>(index));
+void MainWindow::on_generator_infill_input_editingFinished() {
+    this->simulation.generator->set_infill(this->ui->generator_infill_input->value());
+    simulation.send_config();
 }
+
+void MainWindow::on_generator_generatortype_input_currentIndexChanged(int index) {
+    this->simulation.generator->set_type(static_cast<GeneratorType>(index));
+    simulation.send_config();
+}
+
 /*
 void MainWindow::on_arx_noise_input_editingFinished()
 {
@@ -412,29 +438,40 @@ void MainWindow::on_simulation_reset_button_clicked()
     emit this->simulation.reset();
 }
 
-void MainWindow::on_simulation_interval_input_editingFinished()
-{
+void MainWindow::on_simulation_interval_input_editingFinished() {
     if (this->simulation.is_running)
         this->simulation.stop();
+
     this->simulation.set_interval(this->ui->simulation_interval_input->value());
+    simulation.send_config();
 }
 
-void MainWindow::on_generator_infill_input_editingFinished()
-{
-    this->simulation.generator->set_infill(this->ui->generator_infill_input->value());
-}
+
+
+
+
 
 void MainWindow::on_radioButton_toggled(bool checked)
 {
     this->simulation.pid->set_integral_mode_pullout(!checked);
+     simulation.send_config();
 }
 void MainWindow::openArxDialog()
 {
     qDebug() << "Przed otwarciem dialogu";
     ArxChangeParameters dialog(this);
-    dialog.exec();
-    qDebug() << "Po zamknięciu dialogu";
+     dialog.exec();
+        QTimer::singleShot(200, []() {
+        Simulation::get_instance().send_arx_config();
+        });
+
+        simulation.send_arx_config();
+
+
+
+
 }
+
 
 void MainWindow::on_btnPolacz_clicked()
 {

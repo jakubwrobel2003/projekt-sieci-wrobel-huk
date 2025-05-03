@@ -3,6 +3,7 @@
 #include <QMessageBox>
 #include <QStringList>
 #include "ui_arxchangeparameters.h"
+#include "simulation.h"
 ArxChangeParameters::ArxChangeParameters(QWidget *parent)
     : QDialog(parent)
     , ui(new Ui::ArxChangeParameters)
@@ -27,6 +28,11 @@ ArxChangeParameters::ArxChangeParameters(QWidget *parent)
     ui->arx_b_input->setText(b_values.join(","));
     connect(ui->buttonBox, &QDialogButtonBox::rejected, this, &QWidget::close);
     connect(ui->buttonBox, &QDialogButtonBox::accepted, this, &ArxChangeParameters::onOkClicked);
+    connect(simulation, &Simulation::config_arx_received,
+            this, &ArxChangeParameters::apply_arx_packet);
+
+
+
 }
 
 ArxChangeParameters::~ArxChangeParameters()
@@ -70,6 +76,24 @@ void ArxChangeParameters::onOkClicked()
     }
     simulation->arx->set_b(b);
 
+
+
+
     // zamknij okno
-    this->accept(); // lub close() jeśli nie chcesz exec()
+    this->accept();
+
+    // lub close() jeśli nie chcesz exec()
+}
+void ArxChangeParameters::apply_arx_packet(const ConfigARXPacket& packet)
+{
+    ui->arx_delay_input->setValue(packet.delay);
+    ui->arx_noise_input->setValue(packet.noise);
+    ui->arx_noisetype_input->setCurrentIndex(static_cast<int>(packet.noise_type));
+
+    QStringList aStr, bStr;
+    for (float val : packet.a) aStr << QString::number(val);
+    for (float val : packet.b) bStr << QString::number(val);
+
+    ui->arx_a_input->setText(aStr.join(","));
+    ui->arx_b_input->setText(bStr.join(","));
 }
