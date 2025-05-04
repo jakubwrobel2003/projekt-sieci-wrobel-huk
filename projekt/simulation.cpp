@@ -90,7 +90,7 @@ void Simulation::initialize_udp_receiver()
     if (!udpSocket.bind(QHostAddress("127.0.0.1"), port,
 
                         QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) {
-        qWarning() << "[UDP] Nie udało się zbindować portu" << mainPort << ":" << udpSocket.errorString();
+       // qWarning() << "[UDP] Nie udało się zbindować portu"   ":" << udpSocket.errorString();
     } else {
 
         qDebug() << "[UDP] Zbindowano port" << port
