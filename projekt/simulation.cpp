@@ -20,9 +20,12 @@ void Simulation::send_arx_config() {
     out.setVersion(QDataStream::Qt_6_0);
     out << packet;
 
+
     udpSocket.writeDatagram(data, QHostAddress("127.0.0.1"), PORT_SERWERA);
 
-    qDebug() << "[CLIENT] Wysłano ConfigARX. Rozmiar pakietu:" << data.size();
+
+    udpSocket.writeDatagram(data, QHostAddress("127.0.0.1"), 1222);
+    qDebug() << "[CLIENT] Wysłano ConfigARX na port 1222";
 }
 
 
@@ -79,17 +82,20 @@ Simulation::Simulation(QObject *parent)
     //
 
 }
-
 void Simulation::initialize_udp_receiver()
 {
+
     quint16 port = isServer ? PORT_SERWERA : PORT_KLIENTA;
 
     if (!udpSocket.bind(QHostAddress("127.0.0.1"), port,
+
                         QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) {
-        qWarning() << "[UDP] Nie udało się zbindować portu" << port << ":" << udpSocket.errorString();
+        qWarning() << "[UDP] Nie udało się zbindować portu" << mainPort << ":" << udpSocket.errorString();
     } else {
+
         qDebug() << "[UDP] Zbindowano port" << port
                  << (isServer ? "(serwer)" : "(klient)");
+
 
         connect(&udpSocket, &QUdpSocket::readyRead, this, [this]() {
             if (!this->network) return;
@@ -124,6 +130,7 @@ void Simulation::receive_from_client()
 
         qDebug() << "[SERVER] Odebrano pakiet typu:" << static_cast<int>(type);
 
+
         if (type == PacketType::ClientResponse) {
             QDataStream in(&buffer, QIODevice::ReadOnly);
             in.setVersion(QDataStream::Qt_6_0);
@@ -153,9 +160,11 @@ void Simulation::receive_from_client()
         }
         else {
             qDebug() << "[SERVER] Nieznany typ pakietu:" << static_cast<int>(type);
+
         }
     }
 }
+
 
 
 
@@ -271,27 +280,7 @@ void Simulation::simulate_server() {
         qDebug() << "[SERVER] Typ pakietu (typeByte):" << static_cast<int>(typeByte);
 
 
-        if (static_cast<PacketType>(typeByte) == PacketType::ConfigARX) {
-            QDataStream in(&buffer, QIODevice::ReadOnly);
-            in.setVersion(QDataStream::Qt_6_0);
-            in.device()->seek(0); // bardzo ważne
 
-            ConfigARXPacket packet;
-            in >> packet;
-
-            arx->set_a(packet.a);
-            arx->set_b(packet.b);
-            arx->set_delay(packet.delay);
-            arx->set_noise(packet.noise);
-            arx->set_noise_type(packet.noise_type);
-
-            qDebug() << "[SERVER] Odebrano ConfigARX: a.size=" << packet.a.size()
-                     << "b.size=" << packet.b.size()
-                     << "delay=" << packet.delay
-                     << "noise=" << packet.noise;
-
-            continue;
-        }
 
 
 

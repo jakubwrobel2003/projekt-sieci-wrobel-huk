@@ -288,7 +288,7 @@ private:
     void simulate();
     void emit_frame_to_chart(const SimulationFrame& frame);
 
-
+    QUdpSocket ARXudpSocketResponse;
     QUdpSocket udpSocketResponse; // nowy socket dla odpowiedzi od klienta
     float last_arx_from_client = 0.0f; // tutaj zapiszemy wartość z klienta
     float last_noise_from_client = 0.0f;

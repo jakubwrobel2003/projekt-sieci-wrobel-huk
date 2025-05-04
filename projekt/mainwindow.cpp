@@ -459,6 +459,7 @@ void MainWindow::on_radioButton_toggled(bool checked)
 void MainWindow::openArxDialog()
 {
 
+
         ArxChangeParameters dialog(this);
         if (dialog.exec() == QDialog::Accepted) {
             simulation.send_arx_config();
@@ -566,6 +567,8 @@ void MainWindow::on_btnPolacz_clicked()
             ui->Status->setText("Serwer nasłuchuje na porcie\n " + QString::number(port));
             ui->btnPolacz->setText("ROZŁĄCZ");
             ui->ArxButton->setEnabled(false);
+            simulation.initialize_udp_receiver();
+
         }
         else
         {
