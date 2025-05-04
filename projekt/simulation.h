@@ -216,7 +216,10 @@ public:
     //
     //udp
     //
+     quint16 PORT_KLIENTA = 1234;  // klient nasłuchuje
+     quint16 PORT_SERWERA = 1235;  // serwer nasłuchuje
 
+    void receive_from_client();
     void send_arx_config();
     void send_config();
     bool simulation_started_by_udp = false;

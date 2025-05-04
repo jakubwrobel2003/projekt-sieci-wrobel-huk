@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by QtCreator 14.0.1, 2025-05-03T21:07:26. -->
+
+<!-- Written by QtCreator 14.0.1, 2025-05-04T19:26:37. -->
+
 <qtcreator>
  <data>
   <variable>EnvironmentId</variable>
@@ -244,8 +246,10 @@
     <value type="bool" key="PE.EnvironmentAspect.PrintOnRun">false</value>
     <value type="QString" key="PerfRecordArgsId">-e cpu-cycles --call-graph &quot;dwarf,4096&quot; -F 250</value>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName">projekt2</value>
-    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">Qt4ProjectManager.Qt4RunConfiguration:C:/sadadsad/projekt-sieci-wrobel-huk/projekt/projekt.pro</value>
-    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">C:/sadadsad/projekt-sieci-wrobel-huk/projekt/projekt.pro</value>
+
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">Qt4ProjectManager.Qt4RunConfiguration:C:/Nowy folder (5)/projekt-sieci-wrobel-huk/projekt/projekt.pro</value>
+    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">C:/Nowy folder (5)/projekt-sieci-wrobel-huk/projekt/projekt.pro</value>
+
     <value type="bool" key="ProjectExplorer.RunConfiguration.Customized">true</value>
     <value type="bool" key="RunConfiguration.UseCppDebuggerAuto">true</value>
     <value type="bool" key="RunConfiguration.UseLibrarySearchPath">true</value>

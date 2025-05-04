@@ -458,12 +458,17 @@ void MainWindow::on_radioButton_toggled(bool checked)
 }
 void MainWindow::openArxDialog()
 {
-    qDebug() << "Przed otwarciem dialogu";
-    ArxChangeParameters dialog(this);
-     dialog.exec();
 
 
-        simulation.send_arx_config();
+        ArxChangeParameters dialog(this);
+        if (dialog.exec() == QDialog::Accepted) {
+            simulation.send_arx_config();
+            qDebug() << "[GUI] Wysłano konfigurację ARX z klienta do serwera";
+        } else {
+            qDebug() << "[GUI] Zmiany ARX anulowane – nic nie wysyłam";
+        }
+
+
 
 
 
@@ -547,6 +552,7 @@ void MainWindow::on_btnPolacz_clicked()
     {
         simulation.network=true;
         simulation.isServer=true;
+         simulation.initialize_udp_receiver();
         if (server)
         {
             server->close();
