@@ -1,10 +1,7 @@
 #include "simulation.h"
 
 
-void Simulation::send_arx_config()
-{
-    qDebug() << "[CLIENT] Próba wysłania ConfigARX";
-
+void Simulation::send_arx_config() {
     if (!network || isServer) {
         qDebug() << "[CLIENT] NIE wysyłam – warunki niespełnione";
         return;
@@ -21,15 +18,13 @@ void Simulation::send_arx_config()
     QByteArray data;
     QDataStream out(&data, QIODevice::WriteOnly);
     out.setVersion(QDataStream::Qt_6_0);
-
-    // ❌ NIE dodawaj type oddzielnie – operator<< już go zawiera
     out << packet;
 
-    udpSocket.writeDatagram(data, QHostAddress("127.0.0.1"), 1234);
-
+    udpSocket.writeDatagram(data, QHostAddress("127.0.0.1"), PORT_SERWERA);
 
     qDebug() << "[CLIENT] Wysłano ConfigARX. Rozmiar pakietu:" << data.size();
 }
+
 
 
 
@@ -56,7 +51,8 @@ void Simulation::send_config()
     out.setVersion(QDataStream::Qt_6_0);
     out << config;
 
-    udpSocket.writeDatagram(data, QHostAddress("127.0.0.1"), 1234);
+    udpSocket.writeDatagram(data, QHostAddress("127.0.0.1"), PORT_KLIENTA);
+
       // lub dynamicznie np. clientIP
     qDebug() << "[SERVER] Wysłano ConfigServerPacket:"
              << "interval =" << config.interval
@@ -86,23 +82,79 @@ Simulation::Simulation(QObject *parent)
 
 void Simulation::initialize_udp_receiver()
 {
-    quint16 port = 1234;
+    quint16 port = isServer ? PORT_SERWERA : PORT_KLIENTA;
 
     if (!udpSocket.bind(QHostAddress("127.0.0.1"), port,
                         QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) {
         qWarning() << "[UDP] Nie udało się zbindować portu" << port << ":" << udpSocket.errorString();
     } else {
-        qDebug() << "[UDP] Zbindowano port" << port;
+        qDebug() << "[UDP] Zbindowano port" << port
+                 << (isServer ? "(serwer)" : "(klient)");
+
         connect(&udpSocket, &QUdpSocket::readyRead, this, [this]() {
             if (!this->network) return;
             if (this->isServer) {
-                this->simulate_server();
+                this->receive_from_client();
             } else {
                 this->simulate_client();
             }
         });
     }
+}
 
+void Simulation::receive_from_client()
+{
+    while (udpSocket.hasPendingDatagrams()) {
+        QByteArray buffer;
+        QHostAddress sender;
+        quint16 senderPort;
+        buffer.resize(udpSocket.pendingDatagramSize());
+        udpSocket.readDatagram(buffer.data(), buffer.size(), &sender, &senderPort);
+
+        if (buffer.isEmpty()) {
+            qWarning() << "[SERVER] Odebrano pusty pakiet – pominięty";
+            continue;
+        }
+
+        QDataStream peek(&buffer, QIODevice::ReadOnly);
+        peek.setVersion(QDataStream::Qt_6_0);
+        quint8 typeByte;
+        peek >> typeByte;
+        PacketType type = static_cast<PacketType>(typeByte);
+
+        qDebug() << "[SERVER] Odebrano pakiet typu:" << static_cast<int>(type);
+
+        if (type == PacketType::ClientResponse) {
+            QDataStream in(&buffer, QIODevice::ReadOnly);
+            in.setVersion(QDataStream::Qt_6_0);
+            in.device()->seek(0);
+            ClientResponsePacket response;
+            in >> response;
+
+            this->last_arx_from_client = response.arx_output;
+            this->last_noise_from_client = response.zaklucenie;
+            qDebug() << "[SERVER] Odebrano odpowiedź od klienta – tick:" << response.tick;
+        }
+        else if (type == PacketType::ConfigARX) {
+            QDataStream in(&buffer, QIODevice::ReadOnly);
+            in.setVersion(QDataStream::Qt_6_0);
+            in.device()->seek(0);
+            ConfigARXPacket packet;
+            in >> packet;
+
+            arx->set_a(packet.a);
+            arx->set_b(packet.b);
+            arx->set_delay(packet.delay);
+            arx->set_noise(packet.noise);
+            arx->set_noise_type(packet.noise_type);
+
+            emit config_arx_received(packet);
+            qDebug() << "[SERVER] Odebrano ConfigARX od klienta";
+        }
+        else {
+            qDebug() << "[SERVER] Nieznany typ pakietu:" << static_cast<int>(type);
+        }
+    }
 }
 
 
@@ -285,7 +337,8 @@ void Simulation::simulate_server() {
     out.setVersion(QDataStream::Qt_6_0);
     out << packet;
 
-    udpSocket.writeDatagram(datagram, QHostAddress("127.0.0.1"), 1234);
+    udpSocket.writeDatagram(datagram, QHostAddress("127.0.0.1"), PORT_KLIENTA);
+
     qDebug() << "[SERVER] Wysłano tick=" << tick;
 
     SimulationFrame frame;
@@ -417,7 +470,8 @@ void Simulation::simulate_client() {
         QDataStream out(&responseData, QIODevice::WriteOnly);
         out.setVersion(QDataStream::Qt_6_0);
         out << response;
-        udpSocket.writeDatagram(responseData, sender, senderPort);
+        udpSocket.writeDatagram(responseData, sender, senderPort); // ✅ działało, bo odpowiadał dokładnie na port źródła
+
         qDebug() << "[CLIENT] Wysłano odpowiedź: tick=" << response.tick;
     }
 }
@@ -501,8 +555,8 @@ void Simulation::start()
         out.setVersion(QDataStream::Qt_6_0);
         out << static_cast<quint8>(PacketType::StartSignal);
 
-        udpSocket.writeDatagram(startPacket, QHostAddress("127.0.0.1"), 1234);  // ten sam port
-        qDebug() << "[SERVER] Wysłano StartSignal do klienta (na 127.0.0.1:1234)";
+        udpSocket.writeDatagram(startPacket, QHostAddress("127.0.0.1"), PORT_KLIENTA);
+         qDebug() << "[SERVER] Wysłano StartSignal do klienta (na 127.0.0.1:1234)";
     }
 
     emit this->simulation_start();  // może być użyte do GUI
@@ -529,8 +583,8 @@ void Simulation::reset()
 
         out << static_cast<quint8>(PacketType::ResetCommand);
 
-        udpSocket.writeDatagram(resetPacket, QHostAddress("127.0.0.1"), 1234);  // poprawny port klienta
-         qDebug() << "[SERVER] Wysłano RESET do klienta";
+        udpSocket.writeDatagram(resetPacket, QHostAddress("127.0.0.1"), PORT_KLIENTA);
+          qDebug() << "[SERVER] Wysłano RESET do klienta";
     }
 }
 
