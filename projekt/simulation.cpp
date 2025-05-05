@@ -21,14 +21,51 @@ void Simulation::send_arx_config() {
     out << packet;
 
 
-    udpSocket.writeDatagram(data, QHostAddress("127.0.0.1"), PORT_SERWERA);
+    udpSocket.writeDatagram(data, QHostAddress(remoteIp), PORT_SERWERA);
 
 
-    udpSocket.writeDatagram(data, QHostAddress("127.0.0.1"), 1222);
+    //udpSocket.writeDatagram(data, QHostAddress(remoteIp), 1222);
     qDebug() << "[CLIENT] Wysłano ConfigARX na port 1222";
 }
 
 
+void Simulation::deinitialize(bool resetSimulation)
+{
+    qDebug() << "[UDP] Deinitializacja komunikacji UDP";
+
+    // Zatrzymaj timer, jeśli działa
+    if (this->is_running) {
+        this->stop();
+    }
+
+    // Odłącz sygnały (jeśli były podpięte)
+    disconnect(&udpSocket, nullptr, nullptr, nullptr);
+
+    // Zamknij socket, jeśli był zbindowany
+    if (udpSocket.state() == QAbstractSocket::BoundState) {
+        udpSocket.close();
+        qDebug() << "[UDP] Zamknięto socket UDP";
+    }
+
+    // Wyzeruj flagi sieciowe
+    this->network = false;
+    this->isServer = false;
+    this->simulation_started_by_udp = false;
+    this->client_data_received = false;
+    //this->client_initialized = false;
+
+    // Wyzeruj adres IP i porty (opcjonalnie)
+    this->remoteIp = "127.0.0.1";
+    this->PORT_KLIENTA = 1234;
+    this->PORT_SERWERA = 1235;
+
+    // Resetuj stan symulacji i wykresów (opcjonalnie)
+    if (resetSimulation) {
+        this->reset();
+    }
+
+    emit communication_status(false);  // do GUI: rozłączono
+}
 
 
 
@@ -54,7 +91,7 @@ void Simulation::send_config()
     out.setVersion(QDataStream::Qt_6_0);
     out << config;
 
-    udpSocket.writeDatagram(data, QHostAddress("127.0.0.1"), PORT_KLIENTA);
+    udpSocket.writeDatagram(data, QHostAddress(remoteIp), PORT_KLIENTA);
 
       // lub dynamicznie np. clientIP
     qDebug() << "[SERVER] Wysłano ConfigServerPacket:"
@@ -87,7 +124,7 @@ void Simulation::initialize_udp_receiver()
 
     quint16 port = isServer ? PORT_SERWERA : PORT_KLIENTA;
 
-    if (!udpSocket.bind(QHostAddress("127.0.0.1"), port,
+    if (!udpSocket.bind(QHostAddress(remoteIp), port,
 
                         QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) {
        // qWarning() << "[UDP] Nie udało się zbindować portu"   ":" << udpSocket.errorString();
@@ -271,7 +308,7 @@ void Simulation::simulate_server() {
 
 
         // 🔴 FILTR: jeśli serwer odbiera swój własny pakiet – ignoruj
-        if (sender.toString() == "127.0.0.1" && senderPort == 1234 &&
+        if (sender.toString() == remoteIp && senderPort == 1234 &&
             (type == PacketType::ConfigServer || type == PacketType::StartSignal || type == PacketType::ResetCommand)) {
             qDebug() << "[SERVER] Ignoruję własny pakiet typu" << static_cast<int>(type);
             continue;
@@ -326,7 +363,7 @@ void Simulation::simulate_server() {
     out.setVersion(QDataStream::Qt_6_0);
     out << packet;
 
-    udpSocket.writeDatagram(datagram, QHostAddress("127.0.0.1"), PORT_KLIENTA);
+    udpSocket.writeDatagram(datagram, QHostAddress(remoteIp), PORT_KLIENTA);
 
     qDebug() << "[SERVER] Wysłano tick=" << tick;
 
@@ -544,7 +581,7 @@ void Simulation::start()
         out.setVersion(QDataStream::Qt_6_0);
         out << static_cast<quint8>(PacketType::StartSignal);
 
-        udpSocket.writeDatagram(startPacket, QHostAddress("127.0.0.1"), PORT_KLIENTA);
+        udpSocket.writeDatagram(startPacket, QHostAddress(remoteIp), PORT_KLIENTA);
          qDebug() << "[SERVER] Wysłano StartSignal do klienta (na 127.0.0.1:1234)";
     }
 
@@ -572,7 +609,7 @@ void Simulation::reset()
 
         out << static_cast<quint8>(PacketType::ResetCommand);
 
-        udpSocket.writeDatagram(resetPacket, QHostAddress("127.0.0.1"), PORT_KLIENTA);
+        udpSocket.writeDatagram(resetPacket, QHostAddress(remoteIp), PORT_KLIENTA);
           qDebug() << "[SERVER] Wysłano RESET do klienta";
     }
 }

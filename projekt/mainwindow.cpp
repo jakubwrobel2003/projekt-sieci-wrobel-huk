@@ -497,7 +497,9 @@ void MainWindow::on_btnPolacz_clicked()
     QString ip = dlg.getIP();
     quint16 port = dlg.getPort();
     QString tryb = dlg.getTryb();
-
+    simulation.PORT_KLIENTA=port+1;
+    simulation.PORT_SERWERA=port;
+    simulation.remoteIp=ip;
     ui->ip->setText("IP: " + ip);
     ui->port->setText("Port: " + QString::number(port));
 
@@ -552,7 +554,7 @@ void MainWindow::on_btnPolacz_clicked()
     {
         simulation.network=true;
         simulation.isServer=true;
-         simulation.initialize_udp_receiver();
+
         if (server)
         {
             server->close();
@@ -567,7 +569,7 @@ void MainWindow::on_btnPolacz_clicked()
             ui->Status->setText("Serwer nasłuchuje na porcie\n " + QString::number(port));
             ui->btnPolacz->setText("ROZŁĄCZ");
             ui->ArxButton->setEnabled(false);
-            simulation.initialize_udp_receiver();
+
 
         }
         else
@@ -600,8 +602,9 @@ void MainWindow::przyPolaczeniuKlienta()
     }
 
     ui->Status->setText("Połączono z serwerem");
-    simulation.initialize_udp_receiver();
 
+    simulation.initialize_udp_receiver();
+    simulation.reset();
 
 }
 
@@ -628,6 +631,9 @@ void MainWindow::przyRozlaczeniuKlienta()
     ui->pid_ti_input->setEnabled(true);
     ui->radioButton->setEnabled(true);
     ui->btnPolacz->setText("POŁĄCZ");
+    simulation.deinitialize(false);
+    ui->simulation_start_button->setEnabled(true);
+    ui->simulation_stop_button->setEnabled(true);
 }
 void MainWindow::bladPolaczeniaKlienta(QAbstractSocket::SocketError blad)
 {
@@ -653,6 +659,7 @@ void MainWindow::nowePolaczenieNaSerwerze()
     clientConnection = server->nextPendingConnection();
 
     QString ip = clientConnection->peerAddress().toString();
+    simulation.remoteIp=ip;
     ip.remove('[').remove(']');
     if (ip == "::1") ip = "127.0.0.1";
 
@@ -676,6 +683,7 @@ void MainWindow::nowePolaczenieNaSerwerze()
         qDebug() << "Klient " << ip << " został rozłączony";
         clientConnection->deleteLater();
         clientConnection = nullptr;
+        simulation.initialize_udp_receiver();
     });
 
     ui->Status->setText("Nowe połączenie od " + ip);
@@ -695,6 +703,10 @@ void MainWindow::rozlaczKlienta()
     ui->pid_ti_input->setEnabled(true);
     ui->radioButton->setEnabled(true);
     ui->btnPolacz->setText("POŁĄCZ");
+    simulation.deinitialize(false);
+    ui->simulation_start_button->setEnabled(true);
+    ui->simulation_stop_button->setEnabled(true);
+
 }
 
 void MainWindow::zatrzymajSerwer()
@@ -713,4 +725,5 @@ void MainWindow::zatrzymajSerwer()
     ui->ArxButton->setEnabled(true);
     ui->Status->setText("Serwer zatrzymany");
     ui->btnPolacz->setText("POŁĄCZ");
+    simulation.deinitialize(false);
 }
