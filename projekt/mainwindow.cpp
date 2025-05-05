@@ -247,7 +247,11 @@ void MainWindow::apply_config(const ConfigServerPacket& packet)
     ui->pid_kp_input->setValue(packet.pid_kp);
     ui->pid_ti_input->setValue(packet.pid_ti);
     ui->pid_td_input->setValue(packet.pid_td);
-    ui->radioButton->setChecked(!packet.pid_ti_pullout);
+
+    disconnect(ui->radioButton, &QRadioButton::toggled, this, &MainWindow::on_radioButton_toggled);
+    ui->radioButton->setChecked(packet.pid_ti_pullout == 0); // Ti pullout = true → przycisk ODZNACZONY
+    connect(ui->radioButton, &QRadioButton::toggled, this, &MainWindow::on_radioButton_toggled);
+
     ui->generator_amplitude_input->setValue(packet.generator_amplitude);
     ui->generator_frequency_input->setValue(packet.generator_frequency);
     ui->generator_generatortype_input->setCurrentIndex(static_cast<int>(packet.generator_type));
@@ -659,10 +663,11 @@ void MainWindow::nowePolaczenieNaSerwerze()
     clientConnection = server->nextPendingConnection();
 
     QString ip = clientConnection->peerAddress().toString();
-    simulation.remoteIp=ip;
+
     ip.remove('[').remove(']');
     if (ip == "::1") ip = "127.0.0.1";
-
+    simulation.remoteIp=ip;
+    simulation.initialize_udp_receiver();
     connect(clientConnection, &QTcpSocket::readyRead, this, [=]() {
         QByteArray data = clientConnection->readAll();
         QString message = QString::fromUtf8(data).trimmed();
@@ -683,7 +688,7 @@ void MainWindow::nowePolaczenieNaSerwerze()
         qDebug() << "Klient " << ip << " został rozłączony";
         clientConnection->deleteLater();
         clientConnection = nullptr;
-        simulation.initialize_udp_receiver();
+
     });
 
     ui->Status->setText("Nowe połączenie od " + ip);

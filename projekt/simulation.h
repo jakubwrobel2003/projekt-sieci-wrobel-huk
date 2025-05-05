@@ -74,7 +74,7 @@ struct ConfigServerPacket {
     float pid_kp;
     float pid_ti;
     float pid_td;
-    bool pid_ti_pullout;
+    int pid_ti_pullout;
     float generator_amplitude;
     float generator_frequency;
     GeneratorType generator_type;

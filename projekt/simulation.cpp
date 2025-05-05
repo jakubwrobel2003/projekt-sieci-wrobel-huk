@@ -80,7 +80,7 @@ void Simulation::send_config()
         .pid_kp = pid->get_kp(),
         .pid_ti = pid->get_ti(),
         .pid_td = pid->get_td(),
-        .pid_ti_pullout = pid->get_integral_mode_pillout(),  // ✅ poprawiona literówka
+        .pid_ti_pullout = pid->get_integral_mode_pillout() ? 1 : 0,  // ✅ poprawiona literówka
         .generator_amplitude = generator->get_amplitude(),
         .generator_frequency = generator->get_frequency(),
         .generator_type = generator->get_type()
@@ -143,6 +143,7 @@ void Simulation::initialize_udp_receiver()
             }
         });
     }
+
 }
 
 void Simulation::receive_from_client()
@@ -415,7 +416,13 @@ void Simulation::simulate_client() {
             pid->set_kp(packet.pid_kp);
             pid->set_ti(packet.pid_ti);
             pid->set_td(packet.pid_td);
-            pid->set_integral_mode_pullout(packet.pid_ti_pullout);
+            if(packet.pid_ti_pullout==1){
+                pid->set_integral_mode_pullout(true);
+
+            }else{
+                pid->set_integral_mode_pullout(false);
+            }
+
             generator->set_amplitude(packet.generator_amplitude);
             generator->set_frequency(packet.generator_frequency);
             generator->set_type(packet.generator_type);
