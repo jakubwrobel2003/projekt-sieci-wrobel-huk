@@ -312,16 +312,22 @@ void MainWindow::init()
 
 void MainWindow::simulation_start()
 {
-    this->ui->simulation_start_button->setEnabled(false);
-    this->ui->simulation_stop_button->setEnabled(true);
+    if(!simulation.isServer)
+    {
+        this->ui->simulation_start_button->setEnabled(false);
+        this->ui->simulation_stop_button->setEnabled(true);
+    }
+
 }
 
 void MainWindow::simulation_stop()
 {
+    if(!simulation.isServer)
+    {
     this->ui->simulation_start_button->setEnabled(true);
     this->ui->simulation_stop_button->setEnabled(false);
+    }
 }
-
 void MainWindow::on_simulation_start_button_clicked()
 {
     if (this->simulation.durration == 0) {
@@ -568,6 +574,13 @@ void MainWindow::on_btnPolacz_clicked()
         simulation.network=true;
         simulation.isServer=true;
 
+        simulation.reset();
+
+        ui->simulation_start_button->setDisabled(1);
+        ui->simulation_stop_button->setDisabled(1);
+        ui->simulation_reset_button->setDisabled(1);
+
+
         if (server)
         {
             server->close();
@@ -617,7 +630,7 @@ void MainWindow::przyPolaczeniuKlienta()
     ui->Status->setText("Połączono z serwerem");
 
     simulation.initialize_udp_receiver();
-    simulation.reset();
+
 
 }
 
@@ -740,4 +753,7 @@ void MainWindow::zatrzymajSerwer()
     ui->Status->setText("Serwer zatrzymany");
     ui->btnPolacz->setText("POŁĄCZ");
     simulation.deinitialize(false);
+    ui->simulation_start_button->setEnabled(1);
+    ui->simulation_stop_button->setEnabled(1);
+    ui->simulation_reset_button->setEnabled(1);
 }

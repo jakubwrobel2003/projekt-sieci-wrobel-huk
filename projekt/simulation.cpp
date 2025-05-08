@@ -158,21 +158,18 @@ Simulation::Simulation(QObject *parent)
 }
 void Simulation::initialize_udp_receiver()
 {
-
     quint16 port = isServer ? PORT_SERWERA : PORT_KLIENTA;
 
-    if (!udpSocket.bind(QHostAddress(remoteIp), port,
-
+    if (!udpSocket.bind(QHostAddress::AnyIPv4, port,
                         QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) {
-       // qWarning() << "[UDP] Nie udało się zbindować portu"   ":" << udpSocket.errorString();
+        qWarning() << "[UDP] Nie udało się zbindować portu" << port << ":" << udpSocket.errorString();
     } else {
-
         qDebug() << "[UDP] Zbindowano port" << port
                  << (isServer ? "(serwer)" : "(klient)");
 
-
         connect(&udpSocket, &QUdpSocket::readyRead, this, [this]() {
             if (!this->network) return;
+
             if (this->isServer) {
                 this->receive_from_client();
             } else {
@@ -180,7 +177,6 @@ void Simulation::initialize_udp_receiver()
             }
         });
     }
-
 }
 
 void Simulation::receive_from_client()
@@ -452,6 +448,7 @@ void Simulation::simulate_client() {
             emit this->reset_chart();
         }
 
+
         float noise = this->arx->noise_part;
         float arx_output = this->arx->run(packet.pid_output);
         float arx_with_noise = arx_output + noise;
@@ -469,7 +466,10 @@ void Simulation::simulate_client() {
         };
 
         this->frames.push_back(frame);
-        emit_frame_to_chart(frame);
+
+         emit_frame_to_chart(frame);
+
+
         this->tick = packet.tick;
 
         // Odpowiedź do serwera
