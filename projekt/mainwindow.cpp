@@ -249,7 +249,9 @@ void MainWindow::apply_config(const ConfigServerPacket& packet)
     ui->pid_td_input->setValue(packet.pid_td);
 
     disconnect(ui->radioButton, &QRadioButton::toggled, this, &MainWindow::on_radioButton_toggled);
-    ui->radioButton->setChecked(packet.pid_ti_pullout == 0); // Ti pullout = true → przycisk ODZNACZONY
+    qDebug()<<packet.pid_ti_pullout<<ui->radioButton->isChecked();
+    ui->radioButton->setChecked(!ui->radioButton->isChecked());
+    //ui->radioButton->setChecked(packet.pid_ti_pullout == 1); // Ti pullout = true → przycisk ODZNACZONY
     connect(ui->radioButton, &QRadioButton::toggled, this, &MainWindow::on_radioButton_toggled);
 
     ui->generator_amplitude_input->setValue(packet.generator_amplitude);
@@ -324,12 +326,17 @@ void MainWindow::on_simulation_start_button_clicked()
 {
     if (this->simulation.durration == 0) {
         this->simulation.start();
+        if (!simulation.isServer) this->simulation_start();
     } else {
         this->simulation.start();
+        if (!simulation.isServer) this->simulation_start();
 
         auto timer = new QTimer(this);
         timer->setSingleShot(true);
-        connect(timer, &QTimer::timeout, [this]() { this->simulation.stop(); });
+        connect(timer, &QTimer::timeout, [this]() {
+            this->simulation.stop();
+            if (!simulation.isServer) this->simulation_stop();
+        });
 
         timer->start(this->simulation.durration * 1000);
     }
@@ -338,7 +345,9 @@ void MainWindow::on_simulation_start_button_clicked()
 void MainWindow::on_simulation_stop_button_clicked()
 {
     this->simulation.stop();
+    if (!simulation.isServer) this->simulation_stop();
 }
+
 
 void MainWindow::on_simulation_duration_input_editingFinished() {
     if (this->simulation.is_running)
@@ -458,19 +467,19 @@ void MainWindow::on_simulation_interval_input_editingFinished() {
 void MainWindow::on_radioButton_toggled(bool checked)
 {
     this->simulation.pid->set_integral_mode_pullout(!checked);
-     simulation.send_config();
+    simulation.send_config();
 }
 void MainWindow::openArxDialog()
 {
 
 
-        ArxChangeParameters dialog(this);
-        if (dialog.exec() == QDialog::Accepted) {
-            simulation.send_arx_config();
-            qDebug() << "[GUI] Wysłano konfigurację ARX z klienta do serwera";
-        } else {
-            qDebug() << "[GUI] Zmiany ARX anulowane – nic nie wysyłam";
-        }
+    ArxChangeParameters dialog(this);
+    if (dialog.exec() == QDialog::Accepted) {
+        simulation.send_arx_config();
+        qDebug() << "[GUI] Wysłano konfigurację ARX z klienta do serwera";
+    } else {
+        qDebug() << "[GUI] Zmiany ARX anulowane – nic nie wysyłam";
+    }
 
 
 
@@ -629,7 +638,7 @@ void MainWindow::przyRozlaczeniuKlienta()
     ui->port->setText("");
     ui->Status->setText(statusText);
     //clientSocket->deleteLater();
-   // clientSocket = nullptr;
+    // clientSocket = nullptr;
     ui->pid_kp_input->setEnabled(true);
     ui->pid_td_input->setEnabled(true);
     ui->pid_ti_input->setEnabled(true);

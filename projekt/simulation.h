@@ -16,7 +16,10 @@ enum class PacketType : quint8 {
     ClientResponse = 2,
     ResetCommand = 3,
     ConfigServer = 4,  // konfiguracja PID i generatora (wysyłana przez serwer)
-    ConfigARX =5     // konfiguracja ARX (wysyłana przez klienta)
+    ConfigARX =5,
+    ClientStart = 6,
+    ClientStop = 7,
+    ClientReset = 8    // konfiguracja ARX (wysyłana przez klienta)
 };
 
 
@@ -64,6 +67,8 @@ struct ConfigARXPacket {
         return in;
     }
 };
+
+
 
 
 
@@ -232,7 +237,12 @@ public:
     QByteArray buffer;
     //
 
+    void  send_client_start();
+    void send_client_stop();
+    void send_client_reset();
     static Simulation &get_instance();
+
+
 
     void start();
     void stop();

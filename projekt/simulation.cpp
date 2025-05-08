@@ -28,6 +28,43 @@ void Simulation::send_arx_config() {
     qDebug() << "[CLIENT] Wysłano ConfigARX na port 1222";
 }
 
+void Simulation::send_client_start() {
+    if (!network || isServer) return;
+
+    QByteArray startPacket;
+    QDataStream out(&startPacket, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_6_0);
+    out << static_cast<quint8>(PacketType::ClientStart);
+    udpSocket.writeDatagram(startPacket, QHostAddress(remoteIp), PORT_SERWERA);
+    qDebug() << "[CLIENT] Wysłano ClientStart";
+}
+
+void Simulation::send_client_stop() {
+    if (!network || isServer) return;
+
+    QByteArray stopPacket;
+    QDataStream out(&stopPacket, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_6_0);
+    out << static_cast<quint8>(PacketType::ClientStop);
+    udpSocket.writeDatagram(stopPacket, QHostAddress(remoteIp), PORT_SERWERA);
+    qDebug() << "[CLIENT] Wysłano ClientStop";
+}
+
+void Simulation::send_client_reset() {
+    if (!network || isServer) return;
+
+    QByteArray resetPacket;
+    QDataStream out(&resetPacket, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_6_0);
+    out << static_cast<quint8>(PacketType::ClientReset);
+    udpSocket.writeDatagram(resetPacket, QHostAddress(remoteIp), PORT_SERWERA);
+    qDebug() << "[CLIENT] Wysłano ClientReset";
+}
+
+
+
+
+
 
 void Simulation::deinitialize(bool resetSimulation)
 {
@@ -160,29 +197,28 @@ void Simulation::receive_from_client()
             continue;
         }
 
-        QDataStream peek(&buffer, QIODevice::ReadOnly);
-        peek.setVersion(QDataStream::Qt_6_0);
+        QDataStream in(&buffer, QIODevice::ReadOnly);
+        in.setVersion(QDataStream::Qt_6_0);
+
         quint8 typeByte;
-        peek >> typeByte;
+        in >> typeByte;
         PacketType type = static_cast<PacketType>(typeByte);
 
-        qDebug() << "[SERVER] Odebrano pakiet typu:" << static_cast<int>(type);
+        qDebug() << "[SERVER] Odebrano pakiet typu:" << static_cast<int>(type) << "z" << sender.toString() << ":" << senderPort;
 
-
-        if (type == PacketType::ClientResponse) {
-            QDataStream in(&buffer, QIODevice::ReadOnly);
-            in.setVersion(QDataStream::Qt_6_0);
+        switch (type) {
+        case PacketType::ClientResponse: {
             in.device()->seek(0);
             ClientResponsePacket response;
             in >> response;
 
             this->last_arx_from_client = response.arx_output;
             this->last_noise_from_client = response.zaklucenie;
-            qDebug() << "[SERVER] Odebrano odpowiedź od klienta – tick:" << response.tick;
+            qDebug() << "[SERVER] Odebrano odpowiedź – tick:" << response.tick;
+            break;
         }
-        else if (type == PacketType::ConfigARX) {
-            QDataStream in(&buffer, QIODevice::ReadOnly);
-            in.setVersion(QDataStream::Qt_6_0);
+
+        case PacketType::ConfigARX: {
             in.device()->seek(0);
             ConfigARXPacket packet;
             in >> packet;
@@ -194,11 +230,28 @@ void Simulation::receive_from_client()
             arx->set_noise_type(packet.noise_type);
 
             emit config_arx_received(packet);
-            qDebug() << "[SERVER] Odebrano ConfigARX od klienta";
+            qDebug() << "[SERVER] Odebrano ConfigARX";
+            break;
         }
-        else {
-            qDebug() << "[SERVER] Nieznany typ pakietu:" << static_cast<int>(type);
 
+        case PacketType::ClientStart:
+            qDebug() << "[SERVER] Odebrano ClientStart – uruchamiam symulację";
+            this->start();
+            break;
+
+        case PacketType::ClientStop:
+            qDebug() << "[SERVER] Odebrano ClientStop – zatrzymuję symulację";
+            this->stop();
+            break;
+
+        case PacketType::ClientReset:
+            qDebug() << "[SERVER] Odebrano ClientReset – resetuję symulację";
+            this->reset();
+            break;
+
+        default:
+            qWarning() << "[SERVER] Nieznany lub nieobsługiwany typ pakietu:" << static_cast<int>(type);
+            break;
         }
     }
 }
@@ -291,58 +344,6 @@ void Simulation::simulate_server() {
     const size_t tick = this->get_tick();
     const float time = tick / this->ticks_per_second;
 
-    // ODBIÓR OD KLIENTA
-    while (udpSocket.hasPendingDatagrams()) {
-        QByteArray buffer;
-        QHostAddress sender;
-        quint16 senderPort;
-        buffer.resize(udpSocket.pendingDatagramSize());
-        udpSocket.readDatagram(buffer.data(), buffer.size(), &sender, &senderPort);
-
-        QDataStream peek(&buffer, QIODevice::ReadOnly);
-        peek.setVersion(QDataStream::Qt_6_0);
-        quint8 typeByte;
-        peek >> typeByte;
-        PacketType type = static_cast<PacketType>(typeByte);
-
-        qDebug() << "[SERVER] Odebrano pakiet typu:" << static_cast<int>(typeByte);
-
-
-        // 🔴 FILTR: jeśli serwer odbiera swój własny pakiet – ignoruj
-        if (sender.toString() == remoteIp && senderPort == 1234 &&
-            (type == PacketType::ConfigServer || type == PacketType::StartSignal || type == PacketType::ResetCommand)) {
-            qDebug() << "[SERVER] Ignoruję własny pakiet typu" << static_cast<int>(type);
-            continue;
-        }
-
-        qDebug() << "[SERVER] Typ pakietu (typeByte):" << static_cast<int>(typeByte);
-
-
-
-
-
-
-
-
-
-
-        if (static_cast<PacketType>(typeByte) == PacketType::ClientResponse) {
-            QDataStream in(&buffer, QIODevice::ReadOnly);  // <-- TUTAJ dodajesz strumień
-            in.setVersion(QDataStream::Qt_6_0);
-
-            ClientResponsePacket response;
-            in >> response;
-
-            this->last_arx_from_client = response.arx_output;
-            this->last_noise_from_client = response.zaklucenie;
-
-            qDebug() << "[SERVER] Odebrano odpowiedź: tick=" << response.tick;
-            continue;
-        }
-
-    }
-
-    // OBLICZENIA
     float generator = this->generator->run(time);
     float error = generator - last_arx_from_client;
     float pid_output = pid->run(error);
@@ -365,7 +366,6 @@ void Simulation::simulate_server() {
     out << packet;
 
     udpSocket.writeDatagram(datagram, QHostAddress(remoteIp), PORT_KLIENTA);
-
     qDebug() << "[SERVER] Wysłano tick=" << tick;
 
     SimulationFrame frame;
@@ -383,6 +383,7 @@ void Simulation::simulate_server() {
     emit_frame_to_chart(frame);
     this->tick++;
 }
+
 
 
 
@@ -431,26 +432,6 @@ void Simulation::simulate_client() {
 
             emit config_server_received(packet);
             qDebug() << "[CLIENT] Odebrano konfigurację serwera";
-            continue;
-        }
-
-        if (type == PacketType::StartSignal) {
-            qDebug() << "[CLIENT] Odebrano StartSignal – uruchamiam timer";
-            if (!this->is_running) {
-                const int interval_ms = std::max(this->interval, 30);
-                this->timer_id = this->startTimer(interval_ms);
-                this->is_running = true;
-                emit this->simulation_start();
-            }
-            continue;
-        }
-
-        if (type == PacketType::ResetCommand) {
-            qDebug() << "[CLIENT] Odebrano RESET – wykonuję reset ARX";
-            this->arx->reset();
-            this->tick = 0;
-            this->frames.clear();
-            emit this->reset_chart();
             continue;
         }
 
@@ -577,57 +558,74 @@ void Simulation::start()
         return;
     }
 
-    this->timer_id = this->startTimer(interval_ms);
-    this->is_running = true;
-    qDebug() << "[SIMULATION] startTimer OK, interval =" << interval_ms;
-
-    // 🔴 TYLKO serwer wysyła StartSignal do klienta (na ten sam port: 1234)
-    if (network && isServer) {
+    if (network && !isServer) {
+        // Klient wysyła polecenie do serwera
         QByteArray startPacket;
         QDataStream out(&startPacket, QIODevice::WriteOnly);
         out.setVersion(QDataStream::Qt_6_0);
-        out << static_cast<quint8>(PacketType::StartSignal);
-
-        udpSocket.writeDatagram(startPacket, QHostAddress(remoteIp), PORT_KLIENTA);
-         qDebug() << "[SERVER] Wysłano StartSignal do klienta (na 127.0.0.1:1234)";
+        out << static_cast<quint8>(PacketType::ClientStart);
+        udpSocket.writeDatagram(startPacket, QHostAddress(remoteIp), PORT_SERWERA);
+        qDebug() << "[CLIENT] Wysłano ClientStart";
+        return;
     }
 
-    emit this->simulation_start();  // może być użyte do GUI
+    if (!network || isServer) {
+        // Serwer (lub lokalnie) – uruchamia timer
+        this->timer_id = this->startTimer(interval_ms);
+        this->is_running = true;
+        qDebug() << "[TIMER] startTimer OK, interval =" << interval_ms;
+        emit this->simulation_start();
+    }
 }
+
 
 
 void Simulation::reset()
 {
-    this->stop();
+    qDebug() << "[RESET] reset() wywołane, isServer=" << isServer;
 
+    // ✅ Zawsze wykonaj lokalnie reset
+    this->stop();
     this->tick = 0;
     this->is_running = false;
-
-    emit this->reset_chart();
-
     this->pid->reset();
     this->arx->reset();
     this->frames.clear();
-    if (network && isServer) {
-        // Wyślij ResetCommand do klienta
+    emit this->reset_chart();
+    qDebug() << "[RESET] Reset lokalny wykonany";
+
+    // ✅ Jeśli klient – wyślij reset do serwera
+    if (network && !isServer) {
         QByteArray resetPacket;
         QDataStream out(&resetPacket, QIODevice::WriteOnly);
         out.setVersion(QDataStream::Qt_6_0);
-
-        out << static_cast<quint8>(PacketType::ResetCommand);
-
-        udpSocket.writeDatagram(resetPacket, QHostAddress(remoteIp), PORT_KLIENTA);
-          qDebug() << "[SERVER] Wysłano RESET do klienta";
+        out << static_cast<quint8>(PacketType::ClientReset);
+        udpSocket.writeDatagram(resetPacket, QHostAddress(remoteIp), PORT_SERWERA);
+        qDebug() << "[CLIENT] Wysłano ClientReset do serwera";
     }
 }
 
+
 void Simulation::stop()
 {
+    if (network && !isServer) {
+        QByteArray stopPacket;
+        QDataStream out(&stopPacket, QIODevice::WriteOnly);
+        out.setVersion(QDataStream::Qt_6_0);
+        out << static_cast<quint8>(PacketType::ClientStop);
+        udpSocket.writeDatagram(stopPacket, QHostAddress(remoteIp), PORT_SERWERA);
+        qDebug() << "[CLIENT] Wysłano ClientStop";
+        return;
+    }
+
+    // to zostanie wykonane tylko na serwerze
     this->killTimer(this->timer_id);
     this->is_running = false;
-
+    qDebug() << "[SERVER] Zatrzymano symulację";
     emit this->simulation_stop();
 }
+
+
 
 void Simulation::set_duration(float duration)
 {

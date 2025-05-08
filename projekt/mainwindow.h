@@ -82,6 +82,8 @@ private slots:
     void on_btnPolacz_clicked();
 
 
+    void on_checkbox_clicked();
+
 private:
     void init();
     QTimer* polaczenieTimer = nullptr;
