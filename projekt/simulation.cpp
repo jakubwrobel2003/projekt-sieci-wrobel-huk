@@ -12,7 +12,9 @@ void Simulation::send_arx_config() {
         .b = arx->get_b(),
         .delay = arx->get_delay(),
         .noise = arx->get_noise(),
-        .noise_type = arx->get_noise_type()
+        .noise_type = arx->get_noise_type(),
+        .interval = this->interval,
+        .duration = this->durration,
     };
 
     QByteArray data;
@@ -112,12 +114,11 @@ void Simulation::send_config()
     if (!network || !isServer) return;
 
     ConfigServerPacket config {
-        .interval = this->interval,
-        .duration = this->durration,
+
         .pid_kp = pid->get_kp(),
         .pid_ti = pid->get_ti(),
         .pid_td = pid->get_td(),
-        .pid_ti_pullout = pid->get_integral_mode_pillout() ? 1 : 0,  // ✅ poprawiona literówka
+        .pid_ti_pullout = pid->get_integral_mode_pillout() ? 1 : 0,
         .generator_amplitude = generator->get_amplitude(),
         .generator_frequency = generator->get_frequency(),
         .generator_type = generator->get_type()
@@ -132,8 +133,8 @@ void Simulation::send_config()
 
       // lub dynamicznie np. clientIP
     qDebug() << "[SERVER] Wysłano ConfigServerPacket:"
-             << "interval =" << config.interval
-             << "duration =" << config.duration
+            // << "interval =" << config.interval
+            // << "duration =" << config.duration
              << "Kp =" << config.pid_kp
              << "Ti =" << config.pid_ti
              << "Td =" << config.pid_td;
@@ -179,6 +180,7 @@ void Simulation::initialize_udp_receiver()
     }
 }
 
+
 void Simulation::receive_from_client()
 {
     while (udpSocket.hasPendingDatagrams()) {
@@ -220,15 +222,21 @@ void Simulation::receive_from_client()
             in >> packet;
 
             arx->set_a(packet.a);
-            arx->set_b(packet.b);
+            arx->set_b(packet.b);                      // ← poprawione
             arx->set_delay(packet.delay);
             arx->set_noise(packet.noise);
             arx->set_noise_type(packet.noise_type);
 
-            emit config_arx_received(packet);
-            qDebug() << "[SERVER] Odebrano ConfigARX";
+            this->interval = packet.interval;
+            this->durration = packet.duration;
+
+           emit config_arx_received(packet);
+            qDebug() << "[SERVER] Odebrano ConfigARX, ustawiono interval =" << interval << " duration =" << durration;
+
+
             break;
         }
+
 
         case PacketType::ClientStart:
             qDebug() << "[SERVER] Odebrano ClientStart – uruchamiam symulację";
@@ -423,8 +431,8 @@ void Simulation::simulate_client() {
             generator->set_amplitude(packet.generator_amplitude);
             generator->set_frequency(packet.generator_frequency);
             generator->set_type(packet.generator_type);
-            this->interval = packet.interval;
-            this->durration = packet.duration;
+           // this->interval = packet.interval;
+           // this->durration = packet.duration;
 
             emit config_server_received(packet);
             qDebug() << "[CLIENT] Odebrano konfigurację serwera";
@@ -447,46 +455,62 @@ void Simulation::simulate_client() {
             this->frames.clear();
             emit this->reset_chart();
         }
+        else if(packet.tick<this->tick)
+        {
 
+            auto it = frames.begin();
+            std::advance(it, packet.tick);  // 19, bo indeksowanie od 0
+            //std::cout << "20. element to: " << *it << std::endl;
 
-        float noise = this->arx->noise_part;
-        float arx_output = this->arx->run(packet.pid_output);
-        float arx_with_noise = arx_output + noise;
+            ClientResponsePacket response{
+                .type = PacketType::ClientResponse,
+                .tick = it->tick,
+                .arx_output = it->arx_output,
+                .zaklucenie = it->noise,
+            };
+        }
+        else{
+            float noise = this->arx->noise_part;
+            float arx_output = this->arx->run(packet.pid_output);
+            float arx_with_noise = arx_output + noise;
 
-        SimulationFrame frame{
-            .tick = packet.tick,
-            .geneartor_output = packet.generator,
-            .p = packet.p,
-            .i = packet.i,
-            .d = packet.d,
-            .pid_output = packet.pid_output,
-            .error = packet.error,
-            .arx_output = arx_output,
-            .noise = noise
-        };
+            SimulationFrame frame{
+                .tick = packet.tick,
+                .geneartor_output = packet.generator,
+                .p = packet.p,
+                .i = packet.i,
+                .d = packet.d,
+                .pid_output = packet.pid_output,
+                .error = packet.error,
+                .arx_output = arx_output,
+                .noise = noise
 
-        this->frames.push_back(frame);
+            };
 
-         emit_frame_to_chart(frame);
+            this->frames.push_back(frame);
 
+            emit_frame_to_chart(frame);
+            this->tick = packet.tick;
 
-        this->tick = packet.tick;
+            ClientResponsePacket response{
+                .type = PacketType::ClientResponse,
+                .tick = packet.tick,
+                .arx_output = arx_with_noise,
+                .zaklucenie = noise
+            };
+
+            QByteArray responseData;
+            QDataStream out(&responseData, QIODevice::WriteOnly);
+            out.setVersion(QDataStream::Qt_6_0);
+            out << response;
+            udpSocket.writeDatagram(responseData, sender, senderPort);
+
+            qDebug() << "[CLIENT] Wysłano odpowiedź: tick=" << response.tick;
+        }
+
 
         // Odpowiedź do serwera
-        ClientResponsePacket response{
-            .type = PacketType::ClientResponse,
-            .tick = packet.tick,
-            .arx_output = arx_with_noise,
-            .zaklucenie = noise
-        };
 
-        QByteArray responseData;
-        QDataStream out(&responseData, QIODevice::WriteOnly);
-        out.setVersion(QDataStream::Qt_6_0);
-        out << response;
-        udpSocket.writeDatagram(responseData, sender, senderPort); // ✅ działało, bo odpowiadał dokładnie na port źródła
-
-        qDebug() << "[CLIENT] Wysłano odpowiedź: tick=" << response.tick;
     }
 }
 
@@ -570,7 +594,7 @@ void Simulation::start()
     }
 
     if (!network || isServer) {
-        // Serwer (lub lokalnie) – uruchamia timer
+
         this->timer_id = this->startTimer(interval_ms);
         this->is_running = true;
         qDebug() << "[TIMER] startTimer OK, interval =" << interval_ms;
@@ -584,7 +608,7 @@ void Simulation::reset()
 {
     qDebug() << "[RESET] reset() wywołane, isServer=" << isServer;
 
-    // ✅ Zawsze wykonaj lokalnie reset
+
     this->stop();
     this->tick = 0;
     this->is_running = false;
@@ -594,7 +618,7 @@ void Simulation::reset()
     emit this->reset_chart();
     qDebug() << "[RESET] Reset lokalny wykonany";
 
-    // ✅ Jeśli klient – wyślij reset do serwera
+
     if (network && !isServer) {
         QByteArray resetPacket;
         QDataStream out(&resetPacket, QIODevice::WriteOnly);

@@ -81,8 +81,10 @@ private slots:
 
     void on_btnPolacz_clicked();
 
+    void apply_config_arx(const ConfigARXPacket& packet);
 
-    void on_checkbox_clicked();
+
+    void apply_arx_config(const ConfigARXPacket& packet);
 
 private:
     void init();

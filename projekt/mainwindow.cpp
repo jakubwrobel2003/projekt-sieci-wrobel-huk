@@ -38,6 +38,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(&simulation, &Simulation::config_server_received,
             this, &MainWindow::apply_config);
 
+    connect(&simulation, &Simulation::config_arx_received, this, &MainWindow::apply_arx_config);
+
 }
 
 
@@ -239,19 +241,26 @@ void MainWindow::action_open()
     qDebug() << "opened";
 }
 
+void MainWindow::apply_config_arx(const ConfigARXPacket& packet)
+{
+      ui->simulation_interval_input->setValue(packet.interval);
+     ui->simulation_duration_input->setValue(packet.duration);
+
+}
 
 void MainWindow::apply_config(const ConfigServerPacket& packet)
 {
-    ui->simulation_interval_input->setValue(packet.interval);
-    ui->simulation_duration_input->setValue(packet.duration);
+   // ui->simulation__input->setValue(packet.interval);
+   // ui->simulation_duration_input->setValue(packet.duration);
     ui->pid_kp_input->setValue(packet.pid_kp);
     ui->pid_ti_input->setValue(packet.pid_ti);
     ui->pid_td_input->setValue(packet.pid_td);
 
     disconnect(ui->radioButton, &QRadioButton::toggled, this, &MainWindow::on_radioButton_toggled);
     qDebug()<<packet.pid_ti_pullout<<ui->radioButton->isChecked();
-    ui->radioButton->setChecked(!ui->radioButton->isChecked());
-    //ui->radioButton->setChecked(packet.pid_ti_pullout == 1); // Ti pullout = true → przycisk ODZNACZONY
+    ui->radioButton->setChecked(packet.pid_ti_pullout);
+    //ui->radioButton->setChecked(packet.pid_ti_pullout == 1);
+
     connect(ui->radioButton, &QRadioButton::toggled, this, &MainWindow::on_radioButton_toggled);
 
     ui->generator_amplitude_input->setValue(packet.generator_amplitude);
@@ -312,22 +321,23 @@ void MainWindow::init()
 
 void MainWindow::simulation_start()
 {
+
     if(!simulation.isServer)
     {
         this->ui->simulation_start_button->setEnabled(false);
         this->ui->simulation_stop_button->setEnabled(true);
     }
-
 }
 
 void MainWindow::simulation_stop()
 {
     if(!simulation.isServer)
     {
-    this->ui->simulation_start_button->setEnabled(true);
-    this->ui->simulation_stop_button->setEnabled(false);
+        this->ui->simulation_start_button->setEnabled(true);
+        this->ui->simulation_stop_button->setEnabled(false);
     }
 }
+
 void MainWindow::on_simulation_start_button_clicked()
 {
     if (this->simulation.durration == 0) {
@@ -360,7 +370,8 @@ void MainWindow::on_simulation_duration_input_editingFinished() {
         this->simulation.stop();
 
     this->simulation.set_duration(this->ui->simulation_duration_input->value());
-    simulation.send_config();
+   // simulation.send_config();
+    simulation.send_arx_config();
 }
 
 void MainWindow::on_pid_kp_input_editingFinished() {
@@ -462,7 +473,11 @@ void MainWindow::on_simulation_interval_input_editingFinished() {
         this->simulation.stop();
 
     this->simulation.set_interval(this->ui->simulation_interval_input->value());
-    simulation.send_config();
+   // simulation.send_config();
+    simulation.send_arx_config();
+
+
+
 }
 
 
@@ -494,7 +509,11 @@ void MainWindow::openArxDialog()
 
 }
 
-
+void MainWindow::apply_arx_config(const ConfigARXPacket& packet)
+{
+    ui->simulation_interval_input->setValue(packet.interval);
+    ui->simulation_duration_input->setValue(packet.duration);
+}
 void MainWindow::on_btnPolacz_clicked()
 {
     if (clientSocket && clientSocket->state() == QAbstractSocket::ConnectedState)
@@ -556,6 +575,10 @@ void MainWindow::on_btnPolacz_clicked()
                 ui->pid_td_input->setEnabled(true);
                 ui->pid_ti_input->setEnabled(true);
                 ui->radioButton->setEnabled(true);
+                ui->generator_amplitude_input->setEnabled(true);
+                ui->generator_frequency_input->setEnabled(true);
+                ui->generator_generatortype_input->setEnabled(true);
+                ui->generator_infill_input->setEnabled(true);
             }
         });
         polaczenieTimer->start(5000); // 5 sekund
@@ -565,6 +588,11 @@ void MainWindow::on_btnPolacz_clicked()
         ui->pid_kp_input->setEnabled(false);
         ui->pid_td_input->setEnabled(false);
         ui->pid_ti_input->setEnabled(false);
+        ui->generator_amplitude_input->setEnabled(false);
+        ui->generator_frequency_input->setEnabled(false);
+            ui->generator_generatortype_input->setEnabled(false);
+                ui->generator_infill_input->setEnabled(false);
+
         ui->radioButton->setEnabled(false);
         ui->btnPolacz->setText("ROZŁĄCZ");
     }
@@ -574,12 +602,14 @@ void MainWindow::on_btnPolacz_clicked()
         simulation.network=true;
         simulation.isServer=true;
 
+
         simulation.reset();
 
         ui->simulation_start_button->setDisabled(1);
         ui->simulation_stop_button->setDisabled(1);
         ui->simulation_reset_button->setDisabled(1);
-
+        ui->simulation_duration_input->setDisabled(1);
+        ui->simulation_interval_input->setDisabled(1);
 
         if (server)
         {
@@ -630,6 +660,7 @@ void MainWindow::przyPolaczeniuKlienta()
     ui->Status->setText("Połączono z serwerem");
 
     simulation.initialize_udp_receiver();
+    simulation.send_arx_config();
 
 
 }
@@ -690,6 +721,7 @@ void MainWindow::nowePolaczenieNaSerwerze()
     if (ip == "::1") ip = "127.0.0.1";
     simulation.remoteIp=ip;
     simulation.initialize_udp_receiver();
+    simulation.send_config();
     connect(clientConnection, &QTcpSocket::readyRead, this, [=]() {
         QByteArray data = clientConnection->readAll();
         QString message = QString::fromUtf8(data).trimmed();
@@ -733,6 +765,10 @@ void MainWindow::rozlaczKlienta()
     simulation.deinitialize(false);
     ui->simulation_start_button->setEnabled(true);
     ui->simulation_stop_button->setEnabled(true);
+    ui->generator_amplitude_input->setEnabled(1);
+    ui->generator_frequency_input->setEnabled(1);
+    ui->generator_generatortype_input->setEnabled(1);
+    ui->generator_infill_input->setEnabled(1);
 
 }
 
@@ -756,4 +792,7 @@ void MainWindow::zatrzymajSerwer()
     ui->simulation_start_button->setEnabled(1);
     ui->simulation_stop_button->setEnabled(1);
     ui->simulation_reset_button->setEnabled(1);
+    ui->simulation_duration_input->setEnabled(1);
+    ui->simulation_interval_input->setEnabled(1);
+
 }

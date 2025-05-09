@@ -30,6 +30,8 @@ struct ConfigARXPacket {
     size_t delay;
     float noise;
     NoiseType noise_type;
+    int interval;
+    float duration;
 
     friend QDataStream& operator<<(QDataStream& out, const ConfigARXPacket& data) {
         out << static_cast<quint8>(data.type)
@@ -39,7 +41,9 @@ struct ConfigARXPacket {
         for (float val : data.b) out << val;
         out << static_cast<quint32>(data.delay)
             << data.noise
-            << static_cast<qint32>(data.noise_type);
+            << static_cast<qint32>(data.noise_type)
+            << data.interval
+            << data.duration;
         return out;
     }
 
@@ -61,9 +65,11 @@ struct ConfigARXPacket {
         quint32 delay;
         qint32 noiseTypeInt;
         in >> delay >> data.noise >> noiseTypeInt;
-
         data.delay = delay;
         data.noise_type = static_cast<NoiseType>(noiseTypeInt);
+
+        in >> data.interval >> data.duration;
+
         return in;
     }
 };
@@ -74,8 +80,8 @@ struct ConfigARXPacket {
 
 struct ConfigServerPacket {
     PacketType type = PacketType::ConfigServer;
-    int interval;
-    float duration;
+    //int interval;
+   // float duration;
     float pid_kp;
     float pid_ti;
     float pid_td;
@@ -86,8 +92,8 @@ struct ConfigServerPacket {
 
     friend QDataStream& operator<<(QDataStream& out, const ConfigServerPacket& data) {
         out << static_cast<quint8>(data.type)
-        << data.interval
-        << data.duration
+       // << data.interval
+       // << data.duration
         << data.pid_kp << data.pid_ti << data.pid_td
         << data.pid_ti_pullout
         << data.generator_amplitude << data.generator_frequency
@@ -100,9 +106,7 @@ struct ConfigServerPacket {
         qint32 generatorTypeInt;
         in >> typeByte;
         data.type = static_cast<PacketType>(typeByte);
-        in >> data.interval
-            >> data.duration
-            >> data.pid_kp >> data.pid_ti >> data.pid_td
+        in  >> data.pid_kp >> data.pid_ti >> data.pid_td
             >> data.pid_ti_pullout
             >> data.generator_amplitude >> data.generator_frequency
             >> generatorTypeInt;
