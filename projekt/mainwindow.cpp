@@ -550,11 +550,12 @@ void MainWindow::on_btnPolacz_clicked()
             clientSocket->disconnectFromHost();
             clientSocket->deleteLater();
         }
-
+        ui->btnPolacz->setDisabled(1);
         clientSocket = new QTcpSocket(this);
         ustawPolaczeniaKlienta();
 
-        // Anuluj poprzedni timer jeśli istniał
+
+
         if (polaczenieTimer)
         {
             polaczenieTimer->stop();
@@ -570,6 +571,7 @@ void MainWindow::on_btnPolacz_clicked()
                 clientSocket->abort(); // przerywa próbę połączenia
                 clientSocket->deleteLater();
                 clientSocket = nullptr;
+                ui->btnPolacz->setEnabled(1);
                 ui->btnPolacz->setText("POŁĄCZ");
                 ui->pid_kp_input->setEnabled(true);
                 ui->pid_td_input->setEnabled(true);
@@ -656,7 +658,7 @@ void MainWindow::przyPolaczeniuKlienta()
         polaczenieTimer->deleteLater();
         polaczenieTimer = nullptr;
     }
-
+    ui->btnPolacz->setEnabled(1);
     ui->Status->setText("Połączono z serwerem");
 
     simulation.initialize_udp_receiver();
@@ -702,13 +704,18 @@ void MainWindow::bladPolaczeniaKlienta(QAbstractSocket::SocketError blad)
         polaczenieTimer->deleteLater();
         polaczenieTimer = nullptr;
     }
-
+     ui->btnPolacz->setEnabled(1);
     ui->Status->setText("Błąd połączenia: " + clientSocket->errorString());
     ui->pid_kp_input->setEnabled(true);
     ui->pid_td_input->setEnabled(true);
     ui->pid_ti_input->setEnabled(true);
     ui->radioButton->setEnabled(true);
     ui->btnPolacz->setText("POŁĄCZ");
+    ui->generator_amplitude_input->setEnabled(1);
+    ui->generator_frequency_input->setEnabled(1);
+    ui->generator_generatortype_input->setEnabled(1);
+    ui->generator_infill_input->setEnabled(1);
+     simulation.deinitialize(false);
 }
 
 void MainWindow::nowePolaczenieNaSerwerze()
@@ -794,5 +801,9 @@ void MainWindow::zatrzymajSerwer()
     ui->simulation_reset_button->setEnabled(1);
     ui->simulation_duration_input->setEnabled(1);
     ui->simulation_interval_input->setEnabled(1);
+    ui->generator_amplitude_input->setEnabled(1);
+    ui->generator_frequency_input->setEnabled(1);
+    ui->generator_generatortype_input->setEnabled(1);
+    ui->generator_infill_input->setEnabled(1);
 
 }

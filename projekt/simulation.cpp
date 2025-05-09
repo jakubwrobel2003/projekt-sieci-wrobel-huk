@@ -72,38 +72,38 @@ void Simulation::deinitialize(bool resetSimulation)
 {
     qDebug() << "[UDP] Deinitializacja komunikacji UDP";
 
-    // Zatrzymaj timer, jeśli działa
+
     if (this->is_running) {
         this->stop();
     }
 
-    // Odłącz sygnały (jeśli były podpięte)
+
     disconnect(&udpSocket, nullptr, nullptr, nullptr);
 
-    // Zamknij socket, jeśli był zbindowany
+
     if (udpSocket.state() == QAbstractSocket::BoundState) {
         udpSocket.close();
         qDebug() << "[UDP] Zamknięto socket UDP";
     }
 
-    // Wyzeruj flagi sieciowe
+
     this->network = false;
     this->isServer = false;
     this->simulation_started_by_udp = false;
     this->client_data_received = false;
     //this->client_initialized = false;
 
-    // Wyzeruj adres IP i porty (opcjonalnie)
+
     this->remoteIp = "127.0.0.1";
     this->PORT_KLIENTA = 1234;
     this->PORT_SERWERA = 1235;
 
-    // Resetuj stan symulacji i wykresów (opcjonalnie)
+
     if (resetSimulation) {
         this->reset();
     }
 
-    emit communication_status(false);  // do GUI: rozłączono
+    emit communication_status(false);
 }
 
 
@@ -131,7 +131,7 @@ void Simulation::send_config()
 
     udpSocket.writeDatagram(data, QHostAddress(remoteIp), PORT_KLIENTA);
 
-      // lub dynamicznie np. clientIP
+
     qDebug() << "[SERVER] Wysłano ConfigServerPacket:"
             // << "interval =" << config.interval
             // << "duration =" << config.duration
@@ -222,7 +222,7 @@ void Simulation::receive_from_client()
             in >> packet;
 
             arx->set_a(packet.a);
-            arx->set_b(packet.b);                      // ← poprawione
+            arx->set_b(packet.b);
             arx->set_delay(packet.delay);
             arx->set_noise(packet.noise);
             arx->set_noise_type(packet.noise_type);
@@ -450,17 +450,16 @@ void Simulation::simulate_client() {
         in >> packet;
 
         if (packet.tick == 0) {
-            qDebug() << "[CLIENT] Reset ARX (tick == 0)";
-            this->arx->reset();
-            this->frames.clear();
-            emit this->reset_chart();
+            //qDebug() << "[CLIENT] Reset ARX (tick == 0)";
+            //this->arx->reset();
+            //this->frames.clear();
+            //emit this->reset_chart();
         }
         else if(packet.tick<this->tick)
         {
 
             auto it = frames.begin();
-            std::advance(it, packet.tick);  // 19, bo indeksowanie od 0
-            //std::cout << "20. element to: " << *it << std::endl;
+            std::advance(it, packet.tick);
 
             ClientResponsePacket response{
                 .type = PacketType::ClientResponse,
