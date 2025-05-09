@@ -258,7 +258,7 @@ void MainWindow::apply_config(const ConfigServerPacket& packet)
 
     disconnect(ui->radioButton, &QRadioButton::toggled, this, &MainWindow::on_radioButton_toggled);
     qDebug()<<packet.pid_ti_pullout<<ui->radioButton->isChecked();
-    ui->radioButton->setChecked(packet.pid_ti_pullout);
+    ui->radioButton->setChecked(!packet.pid_ti_pullout);
     //ui->radioButton->setChecked(packet.pid_ti_pullout == 1);
 
     connect(ui->radioButton, &QRadioButton::toggled, this, &MainWindow::on_radioButton_toggled);
@@ -372,6 +372,9 @@ void MainWindow::on_simulation_duration_input_editingFinished() {
     this->simulation.set_duration(this->ui->simulation_duration_input->value());
    // simulation.send_config();
     simulation.send_arx_config();
+     this->simulation.stop();
+    ui->simulation_stop_button->setEnabled(0);
+     ui->simulation_start_button->setEnabled(1);
 }
 
 void MainWindow::on_pid_kp_input_editingFinished() {
@@ -475,7 +478,10 @@ void MainWindow::on_simulation_interval_input_editingFinished() {
     this->simulation.set_interval(this->ui->simulation_interval_input->value());
    // simulation.send_config();
     simulation.send_arx_config();
+     this->simulation.stop();
 
+    ui->simulation_stop_button->setEnabled(0);
+    ui->simulation_start_button->setEnabled(1);
 
 
 }
