@@ -708,7 +708,13 @@ void MainWindow::przyRozlaczeniuKlienta()
     ui->simulation_stop_button->setEnabled(true);
 
     simulation.deinitialize(false);
-
+    if(simulation.clientrunning){
+        simulation.network=false;
+        simulation.isServer=false;
+        qDebug()<<simulation.clientrunning;
+        simulation.is_running = false;
+        simulation.start();
+    }
 
 }
 void MainWindow::bladPolaczeniaKlienta(QAbstractSocket::SocketError blad)
@@ -766,7 +772,7 @@ void MainWindow::nowePolaczenieNaSerwerze()
         qDebug() << "Klient " << ip << " został rozłączony";
         clientConnection->deleteLater();
         clientConnection = nullptr;
-
+        simulation.stop();
     });
 
     ui->Status->setText("Nowe połączenie od " + ip);
