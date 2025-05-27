@@ -726,7 +726,7 @@ void MainWindow::przyRozlaczeniuKlienta()
         simulation.isServer=false;
         qDebug()<<simulation.clientrunning;
         simulation.is_running = false;
-        simulation.start();
+        //simulation.start();
 
     }
     ui->Status->setStyleSheet("background-color: transparent; border-radius: 10px;");
@@ -787,7 +787,7 @@ void MainWindow::nowePolaczenieNaSerwerze()
         qDebug() << "Klient " << ip << " został rozłączony";
         clientConnection->deleteLater();
         clientConnection = nullptr;
-        simulation.stop();
+        //simulation.stop();
         ui->Status->setStyleSheet("background-color: transparent; border-radius: 10px;");
     });
 
@@ -820,9 +820,12 @@ void MainWindow::rozlaczKlienta()
         simulation.isServer=false;
         qDebug()<<simulation.clientrunning;
         simulation.is_running = false;
+
         simulation.start();
 
     }
+    simulation.PORT_KLIENTA=0;
+    simulation.PORT_SERWERA-0;
     ui->Status->setStyleSheet("background-color: transparent; border-radius: 10px;");
 }
 
