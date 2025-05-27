@@ -755,7 +755,7 @@ void MainWindow::nowePolaczenieNaSerwerze()
         qDebug() << "Klient " << ip << " został rozłączony";
         clientConnection->deleteLater();
         clientConnection = nullptr;
-
+        zatrzymajSerwer();
     });
 
     ui->Status->setText("Nowe połączenie od " + ip);

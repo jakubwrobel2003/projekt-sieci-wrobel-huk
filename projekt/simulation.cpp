@@ -306,9 +306,9 @@ void Simulation::emit_frame_to_chart(const SimulationFrame& frame)
     emit this->add_series("PID D", frame.d, ChartPosition::top);
     emit this->add_series("PID Output", frame.pid_output, ChartPosition::top);
     emit this->add_series("Generator Output", frame.geneartor_output, ChartPosition::middle);
-    emit this->add_series("Error", frame.error, ChartPosition::middle);
+    emit this->add_series("Error", frame.error, ChartPosition::bottom);
     emit this->add_series("ARX Output", frame.arx_output, ChartPosition::bottom);
-    emit this->add_series("Noise", frame.noise, ChartPosition::middle);
+   // emit this->add_series("Noise", frame.noise, ChartPosition::middle);
     emit this->update_chart();
 }
 
