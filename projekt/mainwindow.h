@@ -24,7 +24,7 @@ public:
 
 
 private slots:
-
+    void aktualizujStanTicku(bool ok);
     void apply_config(const ConfigServerPacket& packet);
     void przyPolaczeniuKlienta();
     void przyRozlaczeniuKlienta();

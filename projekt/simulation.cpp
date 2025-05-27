@@ -72,10 +72,11 @@ void Simulation::deinitialize(bool resetSimulation)
 {
     qDebug() << "[UDP] Deinitializacja komunikacji UDP";
 
-
-    //if (this->is_running) {
-   //     this->stop();
-    //}
+   /* bool run=this->is_running;
+    if (this->is_running) {
+       this->stop();
+    }
+    clientrunning=run;*/
 
 
     disconnect(&udpSocket, nullptr, nullptr, nullptr);
@@ -212,6 +213,8 @@ void Simulation::receive_from_client()
 
             this->last_arx_from_client = response.arx_output;
             this->last_noise_from_client = response.zaklucenie;
+            this->response_received_in_tick = true;
+            this->previous_response_ok = true;
             qDebug() << "[SERVER] Odebrano odpowiedź – tick:" << response.tick;
             break;
         }
@@ -230,7 +233,8 @@ void Simulation::receive_from_client()
             this->interval = packet.interval;
             this->durration = packet.duration;
 
-           emit config_arx_received(packet);
+
+             emit config_arx_received(packet);
             qDebug() << "[SERVER] Odebrano ConfigARX, ustawiono interval =" << interval << " duration =" << durration;
 
 
@@ -251,6 +255,8 @@ void Simulation::receive_from_client()
         case PacketType::ClientReset:
             qDebug() << "[SERVER] Odebrano ClientReset – resetuję symulację";
             this->reset();
+            this->last_arx_from_client=0;
+            this->last_noise_from_client=0;
             break;
 
         default:
@@ -305,8 +311,8 @@ void Simulation::emit_frame_to_chart(const SimulationFrame& frame)
     emit this->add_series("PID I", frame.i, ChartPosition::top);
     emit this->add_series("PID D", frame.d, ChartPosition::top);
     emit this->add_series("PID Output", frame.pid_output, ChartPosition::top);
-    emit this->add_series("Generator Output", frame.geneartor_output, ChartPosition::middle);
-    emit this->add_series("Error", frame.error, ChartPosition::bottom);
+    emit this->add_series("Generator Output", frame.geneartor_output, ChartPosition::bottom);
+    emit this->add_series("Error", frame.error, ChartPosition::middle);
     emit this->add_series("ARX Output", frame.arx_output, ChartPosition::bottom);
    // emit this->add_series("Noise", frame.noise, ChartPosition::middle);
     emit this->update_chart();
@@ -345,6 +351,13 @@ void Simulation::simulate_local() {
 }
 
 void Simulation::simulate_server() {
+
+    emit tick_response_ok(this->previous_response_ok);
+
+
+    this->response_received_in_tick = false;
+    this->previous_response_ok = false;
+
     const size_t tick = this->get_tick();
     const float time = tick / this->ticks_per_second;
 
@@ -385,8 +398,11 @@ void Simulation::simulate_server() {
 
     this->frames.push_back(frame);
     emit_frame_to_chart(frame);
+
     this->tick++;
 }
+
+
 
 
 
@@ -408,10 +424,6 @@ void Simulation::simulate_client() {
 
         qDebug() << "[CLIENT] Odebrano pakiet typu:" << static_cast<int>(type)
                  << "z" << sender.toString() << ":" << senderPort;
-        qDebug() << "[CLIENT] Odebrano bajty:" << buffer.toHex();
-
-
-
 
         if (type == PacketType::ConfigServer) {
             in.device()->seek(0);
@@ -421,18 +433,10 @@ void Simulation::simulate_client() {
             pid->set_kp(packet.pid_kp);
             pid->set_ti(packet.pid_ti);
             pid->set_td(packet.pid_td);
-            if(packet.pid_ti_pullout==1){
-                pid->set_integral_mode_pullout(true);
-
-            }else{
-                pid->set_integral_mode_pullout(false);
-            }
-
+            pid->set_integral_mode_pullout(packet.pid_ti_pullout == 1);
             generator->set_amplitude(packet.generator_amplitude);
             generator->set_frequency(packet.generator_frequency);
             generator->set_type(packet.generator_type);
-           // this->interval = packet.interval;
-           // this->durration = packet.duration;
 
             emit config_server_received(packet);
             qDebug() << "[CLIENT] Odebrano konfigurację serwera";
@@ -444,31 +448,17 @@ void Simulation::simulate_client() {
             continue;
         }
 
-        // GeneratorPacket
         in.device()->seek(0);
         GeneratorPacket packet;
         in >> packet;
 
         if (packet.tick == 0) {
-            //qDebug() << "[CLIENT] Reset ARX (tick == 0)";
-            //this->arx->reset();
-            //this->frames.clear();
-            //emit this->reset_chart();
+            // ewentualny reset
         }
-        else if(packet.tick<this->tick)
-        {
-
-            auto it = frames.begin();
-            std::advance(it, packet.tick);
-
-            ClientResponsePacket response{
-                .type = PacketType::ClientResponse,
-                .tick = it->tick,
-                .arx_output = it->arx_output,
-                .zaklucenie = it->noise,
-            };
+        else if (packet.tick < this->tick) {
+            // odpowiedź z cache (można rozwinąć)
         }
-        else{
+        else {
             float noise = this->arx->noise_part;
             float arx_output = this->arx->run(packet.pid_output);
             float arx_with_noise = arx_output + noise;
@@ -483,14 +473,13 @@ void Simulation::simulate_client() {
                 .error = packet.error,
                 .arx_output = arx_output,
                 .noise = noise
-
             };
 
             this->frames.push_back(frame);
-
             emit_frame_to_chart(frame);
             this->tick = packet.tick;
 
+            // PRZYGOTUJEMY odpowiedź:
             ClientResponsePacket response{
                 .type = PacketType::ClientResponse,
                 .tick = packet.tick,
@@ -502,16 +491,20 @@ void Simulation::simulate_client() {
             QDataStream out(&responseData, QIODevice::WriteOnly);
             out.setVersion(QDataStream::Qt_6_0);
             out << response;
-            udpSocket.writeDatagram(responseData, sender, senderPort);
 
-            qDebug() << "[CLIENT] Wysłano odpowiedź: tick=" << response.tick;
+          // utrata pakietu)
+            if (false) {
+                qDebug() << "[CLIENT] SYMULACJA: NIE wysyłam odpowiedzi w tick=" << packet.tick;
+                emit tick_response_ok(false);
+            } else {
+                udpSocket.writeDatagram(responseData, sender, senderPort);
+                qDebug() << "[CLIENT] Wysłano odpowiedź: tick=" << response.tick;
+                emit tick_response_ok(true);
+            }
         }
-
-
-        // Odpowiedź do serwera
-
     }
 }
+
 
 
 
@@ -630,7 +623,9 @@ void Simulation::reset()
 
 
 void Simulation::stop()
-{    clientrunning=false;
+{   clientrunning=false;
+    qDebug() << "[DEBUG] Klient rozłącza się";
+    qDebug() << "network=" << network << " isServer=" << isServer;
     if (network && !isServer) {
         QByteArray stopPacket;
         QDataStream out(&stopPacket, QIODevice::WriteOnly);
@@ -641,11 +636,13 @@ void Simulation::stop()
         return;
     }
 
-    // to zostanie wykonane tylko na serwerze
-    this->killTimer(this->timer_id);
-    this->is_running = false;
-    qDebug() << "[SERVER] Zatrzymano symulację";
-    emit this->simulation_stop();
+    if (this->is_running) {
+        qDebug() << "[STOP] Killing timer with ID:" << this->timer_id;
+        this->killTimer(this->timer_id);
+        this->timer_id = -1;
+        this->is_running = false;
+        emit this->simulation_stop();
+    }
 }
 
 

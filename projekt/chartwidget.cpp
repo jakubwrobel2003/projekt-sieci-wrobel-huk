@@ -54,6 +54,9 @@ void ChartWidget::init()
     // this->chart->legend()->hide();
     this->chart_view->setRenderHint(QPainter::Antialiasing);
 
+    this->axis_x->setTitleText("Tiki");
+    this->axis_y->setTitleText("Wartość");
+
     chart->setMargins(QMargins(0, 0, 0, 0));
     chart->setBackgroundRoundness(0);
     chart->setBackgroundBrush(QBrush(QColor(Qt::transparent)));

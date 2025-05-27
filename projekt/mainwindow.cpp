@@ -270,9 +270,22 @@ void MainWindow::apply_config(const ConfigServerPacket& packet)
 }
 
 
+void MainWindow::aktualizujStanTicku(bool ok)
+{
+    if (ok) {
+        ui->Status->setStyleSheet("QLabel { background-color : lightgreen; }");
+        ui->Status->setText("Synchronizacja OK");
+    } else {
+        ui->Status->setStyleSheet("QLabel { background-color : red; color : white; }");
+        ui->Status->setText("Brak odpowiedzi od klienta");
+    }
+}
+
+
 void MainWindow::init()
 {
     // simulation
+    connect(&simulation, &Simulation::tick_response_ok, this, &MainWindow::aktualizujStanTicku);
 
     // this->ui->simulation_ticks_per_second_input->setValue(this->simulation.get_ticks_per_second());
 
@@ -590,7 +603,7 @@ void MainWindow::on_btnPolacz_clicked()
                 ui->generator_infill_input->setEnabled(true);
             }
         });
-        polaczenieTimer->start(5000); // 5 sekund
+        polaczenieTimer->start(3000); // 5 sekund
 
         clientSocket->connectToHost(ip, port);
         ui->Status->setText("Łączenie z serwerem...");
@@ -714,7 +727,9 @@ void MainWindow::przyRozlaczeniuKlienta()
         qDebug()<<simulation.clientrunning;
         simulation.is_running = false;
         simulation.start();
+
     }
+    ui->Status->setStyleSheet("background-color: transparent; border-radius: 10px;");
 
 }
 void MainWindow::bladPolaczeniaKlienta(QAbstractSocket::SocketError blad)
@@ -773,6 +788,7 @@ void MainWindow::nowePolaczenieNaSerwerze()
         clientConnection->deleteLater();
         clientConnection = nullptr;
         simulation.stop();
+        ui->Status->setStyleSheet("background-color: transparent; border-radius: 10px;");
     });
 
     ui->Status->setText("Nowe połączenie od " + ip);
@@ -805,7 +821,9 @@ void MainWindow::rozlaczKlienta()
         qDebug()<<simulation.clientrunning;
         simulation.is_running = false;
         simulation.start();
+
     }
+    ui->Status->setStyleSheet("background-color: transparent; border-radius: 10px;");
 }
 
 void MainWindow::zatrzymajSerwer()
@@ -834,5 +852,6 @@ void MainWindow::zatrzymajSerwer()
     ui->generator_frequency_input->setEnabled(1);
     ui->generator_generatortype_input->setEnabled(1);
     ui->generator_infill_input->setEnabled(1);
+    ui->Status->setStyleSheet("background-color: transparent; border-radius: 10px;");
 
 }

@@ -222,9 +222,12 @@ class Simulation : public QObject
 public:
     void initialize_udp_receiver();  // deklaracja
     bool clientrunning=false;
+    bool previous_response_ok = false;
+
     //
     //udp
     //
+    bool response_received_in_tick = false;
      quint16 PORT_KLIENTA = 1234;  // klient nasłuchuje
      quint16 PORT_SERWERA = 1235;  // serwer nasłuchuje
      QString remoteIp = "127.0.0.1";
@@ -288,7 +291,8 @@ public:
 
 
 signals:
-      void communication_status(bool ok);
+    void tick_response_ok(bool ok);
+    void communication_status(bool ok);
     void simulation_start();
     void simulation_stop();
 
