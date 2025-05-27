@@ -1,3 +1,4 @@
+
 #include "mainwindow.h"
 #include <QFile>
 #include <QFileDialog>
@@ -669,15 +670,18 @@ void MainWindow::przyPolaczeniuKlienta()
 
     simulation.initialize_udp_receiver();
     simulation.send_arx_config();
+    simulation.reset();
+    ui->simulation_start_button->setEnabled(1);
+    ui->simulation_stop_button->setEnabled(0);
 
 
 }
 
-
 void MainWindow::przyRozlaczeniuKlienta()
 {
-    QString statusText;
 
+
+    QString statusText;
     if (clientSocket && clientSocket->state() == QAbstractSocket::UnconnectedState)
     {
         statusText = "Połączenie z serwerem zostało przerwane\n (serwer zamknięty)";
@@ -686,19 +690,26 @@ void MainWindow::przyRozlaczeniuKlienta()
     {
         statusText = "Rozłączono z serwerem";
     }
+
     ui->ip->setText("");
     ui->port->setText("");
     ui->Status->setText(statusText);
-    //clientSocket->deleteLater();
-    // clientSocket = nullptr;
+    ui->btnPolacz->setText("POŁĄCZ");
+
     ui->pid_kp_input->setEnabled(true);
     ui->pid_td_input->setEnabled(true);
     ui->pid_ti_input->setEnabled(true);
     ui->radioButton->setEnabled(true);
-    ui->btnPolacz->setText("POŁĄCZ");
-    simulation.deinitialize(false);
+    ui->generator_amplitude_input->setEnabled(true);
+    ui->generator_frequency_input->setEnabled(true);
+    ui->generator_generatortype_input->setEnabled(true);
+    ui->generator_infill_input->setEnabled(true);
     ui->simulation_start_button->setEnabled(true);
     ui->simulation_stop_button->setEnabled(true);
+
+    simulation.deinitialize(false);
+
+
 }
 void MainWindow::bladPolaczeniaKlienta(QAbstractSocket::SocketError blad)
 {
@@ -755,7 +766,7 @@ void MainWindow::nowePolaczenieNaSerwerze()
         qDebug() << "Klient " << ip << " został rozłączony";
         clientConnection->deleteLater();
         clientConnection = nullptr;
-        zatrzymajSerwer();
+
     });
 
     ui->Status->setText("Nowe połączenie od " + ip);
@@ -775,14 +786,20 @@ void MainWindow::rozlaczKlienta()
     ui->pid_ti_input->setEnabled(true);
     ui->radioButton->setEnabled(true);
     ui->btnPolacz->setText("POŁĄCZ");
-    simulation.deinitialize(false);
+     simulation.deinitialize(false);
     ui->simulation_start_button->setEnabled(true);
     ui->simulation_stop_button->setEnabled(true);
     ui->generator_amplitude_input->setEnabled(1);
     ui->generator_frequency_input->setEnabled(1);
     ui->generator_generatortype_input->setEnabled(1);
     ui->generator_infill_input->setEnabled(1);
-
+    if(simulation.clientrunning){
+        simulation.network=false;
+        simulation.isServer=false;
+        qDebug()<<simulation.clientrunning;
+        simulation.is_running = false;
+        simulation.start();
+    }
 }
 
 void MainWindow::zatrzymajSerwer()

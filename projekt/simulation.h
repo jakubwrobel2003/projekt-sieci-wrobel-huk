@@ -221,7 +221,7 @@ class Simulation : public QObject
     Q_OBJECT
 public:
     void initialize_udp_receiver();  // deklaracja
-
+    bool clientrunning=false;
     //
     //udp
     //

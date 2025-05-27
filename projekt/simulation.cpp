@@ -73,9 +73,9 @@ void Simulation::deinitialize(bool resetSimulation)
     qDebug() << "[UDP] Deinitializacja komunikacji UDP";
 
 
-    if (this->is_running) {
-        this->stop();
-    }
+    //if (this->is_running) {
+   //     this->stop();
+    //}
 
 
     disconnect(&udpSocket, nullptr, nullptr, nullptr);
@@ -575,7 +575,7 @@ void Simulation::start()
 {
     const int interval_ms = std::max(this->interval, 30);
     qDebug() << "[SIMULATION] start() wywołane, isServer=" << isServer;
-
+    clientrunning=true;
     if (this->is_running) {
         qDebug() << "[SIMULATION] Już działa, pomijam start";
         return;
@@ -630,7 +630,7 @@ void Simulation::reset()
 
 
 void Simulation::stop()
-{
+{    clientrunning=false;
     if (network && !isServer) {
         QByteArray stopPacket;
         QDataStream out(&stopPacket, QIODevice::WriteOnly);
