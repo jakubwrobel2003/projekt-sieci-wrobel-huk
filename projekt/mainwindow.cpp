@@ -277,7 +277,12 @@ void MainWindow::aktualizujStanTicku(bool ok)
         ui->Status->setText("Synchronizacja OK");
     } else {
         ui->Status->setStyleSheet("QLabel { background-color : red; color : white; }");
-        ui->Status->setText("Brak odpowiedzi od klienta");
+        if(simulation.isServer){
+            ui->Status->setText("Brak odpowiedzi od klienta");
+        }else{
+            ui->Status->setText("Problem z wysyłką danych");
+        }
+
     }
 }
 
