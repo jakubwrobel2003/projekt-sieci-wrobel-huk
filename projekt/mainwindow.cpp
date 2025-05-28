@@ -730,8 +730,8 @@ void MainWindow::przyRozlaczeniuKlienta()
         simulation.network=false;
         simulation.isServer=false;
         qDebug()<<simulation.clientrunning;
-        simulation.is_running = false;
-        //simulation.start();
+        //simulation.is_running = false;
+        simulation.start();
 
     }
     ui->Status->setStyleSheet("background-color: transparent; border-radius: 10px;");
@@ -824,7 +824,7 @@ void MainWindow::rozlaczKlienta()
         simulation.network=false;
         simulation.isServer=false;
         qDebug()<<simulation.clientrunning;
-        simulation.is_running = false;
+        //simulation.is_running = false;
 
         simulation.start();
 
